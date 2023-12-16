@@ -168,8 +168,7 @@ const char *vkf::tool::cvmx_chip_type_to_string(VkResult type){
 	}
 	return "VK_ERROR_UNKNOWN";
 }
-void vkf::tool::GetGraphicAndPresentQueueFamiliesIndex(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, int queueFamilies[2])
-{
+void vkf::tool::GetGraphicAndPresentQueueFamiliesIndex(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, int queueFamilies[2]){
     uint32_t queueFamilyCount = 0;
 	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
 
@@ -262,7 +261,8 @@ VkResult vkf::CreateSwapchain(VkPhysicalDevice physicalDevice, VkDevice device, 
 	uint32_t count;
 	VkSurfaceCapabilitiesKHR surfaceCapabilities;
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities);
-    uint32_t imageCount = surfaceCapabilities.minImageCount;
+    uint32_t imageCount = surfaceCapabilities.minImageCount + 1;
+    if(imageCount > 3)imageCount = 3;
     if(surfaceCapabilities.maxImageCount && imageCount > surfaceCapabilities.maxImageCount){
         //最大图片数不等于0说明能使用的最大图片数不能是任意数量
         imageCount = surfaceCapabilities.maxImageCount;
@@ -277,7 +277,7 @@ VkResult vkf::CreateSwapchain(VkPhysicalDevice physicalDevice, VkDevice device, 
     // swapchainInfo.queueFamilyIndexCount = ;
     swapchainInfo.minImageCount = imageCount;
     // swapchainInfo.oldSwapchain = VK_NULL_HANDLE;
-    swapchainInfo.imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
+    swapchainInfo.imageFormat = SWAPCHAIN_FORMAT;
     swapchainInfo.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
     swapchainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     swapchainInfo.imageExtent = surfaceCapabilities.currentExtent;
@@ -285,6 +285,7 @@ VkResult vkf::CreateSwapchain(VkPhysicalDevice physicalDevice, VkDevice device, 
     swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     swapchainInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     swapchainInfo.preTransform = surfaceCapabilities.currentTransform;
+    // swapchainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	return vkCreateSwapchainKHR(device, &swapchainInfo, nullptr, &swapchain);
 }
 void vkf::CreateSemaphoreAndFenceForSwapchain(VkDevice device, uint32_t swapchainImageCount, VulkanSynchronize&vulkanSynchronize){
@@ -296,14 +297,17 @@ void vkf::CreateSemaphoreAndFenceForSwapchain(VkDevice device, uint32_t swapchai
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     // uint32_t swapchainImageCount;
 	// vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, nullptr);
-    vulkanSynchronize.fences.resize(swapchainImageCount);
-	vulkanSynchronize.imageAcquired.resize(swapchainImageCount);
-	vulkanSynchronize.renderComplete.resize(swapchainImageCount);
-	for (size_t i = 0; i < swapchainImageCount; ++i) {
-    	vkCreateFence(device, &fenceInfo, nullptr, &vulkanSynchronize.fences[i]);
-		vkCreateSemaphore(device, &semaphoreInfo, nullptr, &vulkanSynchronize.renderComplete[i]);
-		vkCreateSemaphore(device, &semaphoreInfo, nullptr, &vulkanSynchronize.imageAcquired[i]);
-	}
+    // vulkanSynchronize.fences.resize(swapchainImageCount);
+	 vulkanSynchronize.imageAcquired.resize(swapchainImageCount);
+	 vulkanSynchronize.renderComplete.resize(swapchainImageCount);
+	 for (size_t i = 0; i < swapchainImageCount; ++i) {
+     	//vkCreateFence(device, &fenceInfo, nullptr, &vulkanSynchronize.fences[i]);
+	 	vkCreateSemaphore(device, &semaphoreInfo, nullptr, &vulkanSynchronize.renderComplete[i]);
+	 	vkCreateSemaphore(device, &semaphoreInfo, nullptr, &vulkanSynchronize.imageAcquired[i]);
+	 }
+    vkCreateFence(device, &fenceInfo, nullptr, &vulkanSynchronize.fences);
+    //vkCreateSemaphore(device, &semaphoreInfo, nullptr, &vulkanSynchronize.renderComplete);
+    //vkCreateSemaphore(device, &semaphoreInfo, nullptr, &vulkanSynchronize.imageAcquired);
 }
 VkResult vkf::CreateRenderPassForSwapchain(VkDevice device, VkRenderPass&renderPass, bool useDepthImage){
     VkSubpassDependency dependency = {};
@@ -363,10 +367,10 @@ VkResult vkf::CreateRenderPass(VkDevice device, const std::vector<VkSubpassDescr
 void vkf::CreateFrameBufferForSwapchain(VkDevice device, const VkExtent2D&swapchainExtent, VulkanWindows&vulkanWindows, bool createDepthImage){
     uint32_t count;
 	vkGetSwapchainImagesKHR(device, vulkanWindows.swapchain, &count, nullptr);
-	std::vector<VkImage>swapchainImages(count);
-	vkGetSwapchainImagesKHR(device, vulkanWindows.swapchain, &count, swapchainImages.data());
-	vulkanWindows.swapchainImageViews.resize(swapchainImages.size());
-	vulkanWindows.framebuffers.resize(swapchainImages.size());
+    vulkanWindows.swapchainImages.resize(count);
+	vkGetSwapchainImagesKHR(device, vulkanWindows.swapchain, &count, vulkanWindows.swapchainImages.data());
+	vulkanWindows.swapchainImageViews.resize(vulkanWindows.swapchainImages.size());
+	vulkanWindows.framebuffers.resize(vulkanWindows.swapchainImages.size());
 	std::vector<VkImageView>frameBufferAttachments(1);
 	if(createDepthImage){
         CreateDepthImage(device, swapchainExtent, vulkanWindows.depthImage);
@@ -379,7 +383,7 @@ void vkf::CreateFrameBufferForSwapchain(VkDevice device, const VkExtent2D&swapch
     VkImageViewCreateInfo imageViewInfo = {};
 	for (size_t i = 0; i < vulkanWindows.framebuffers.size(); ++i){
         imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        imageViewInfo.image = swapchainImages[i];
+        imageViewInfo.image = vulkanWindows.swapchainImages[i];
         imageViewInfo.subresourceRange.levelCount = 1;
         imageViewInfo.subresourceRange.layerCount = 1;
         imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
@@ -453,18 +457,16 @@ VkResult vkf::RenderFrame(VkDevice device, const VkCommandBuffer&commandbuffers,
 	return vkQueueSubmit(graphics, 1, &submitInfo, fence);
 }
 
-uint32_t vkf::PrepareFrame(VkDevice device, VkSwapchainKHR swapchain, const VkSemaphore&imageAcquired, void(*recreateSwapchain)(void* userData), void* userData){
-    uint32_t imageIndex;
-    VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAcquired, VK_NULL_HANDLE, &imageIndex);
-    if (recreateSwapchain && result == VK_ERROR_OUT_OF_DATE_KHR) {
-        recreateSwapchain(userData);
-        return result;
-    }
-    else if(result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR){
-        printf("failed to acquire swap chain image!\n");
-        return result;
-    }
-    return imageIndex;
+VkResult vkf::PrepareFrame(VkDevice device, VkSwapchainKHR swapchain, const VkSemaphore&imageAcquired, uint32_t&imageIndex){
+    //if (recreateSwapchain && result == VK_ERROR_OUT_OF_DATE_KHR) {
+    //    recreateSwapchain(userData);
+    //    return result;
+    //}
+    //else if(result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR){
+    //    printf("failed to acquire swap chain image!\n");
+    //    return result;
+    //}
+    return vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAcquired, VK_NULL_HANDLE, &imageIndex);
 }
 
 VkResult vkf::SubmitFrame(VkDevice device, uint32_t imageIndex, VkSwapchainKHR swapchain, const VkQueue present, const VkSemaphore&renderComplete, void(*recreateSwapchain)(void* userData), void* userData){
@@ -478,14 +480,21 @@ VkResult vkf::SubmitFrame(VkDevice device, uint32_t imageIndex, VkSwapchainKHR s
     return vkQueuePresentKHR(present, &presentInfo);
 }
 void vkf::DrawFrame(VkDevice device, uint32_t currentFrame, const VkCommandBuffer& commandbuffers, VkSwapchainKHR swapchain, const VulkanQueue&vulkanQueue, const VulkanSynchronize&vulkanSynchronize, void(*recreateSwapchain)(void* userData), void* userData){
-    vkWaitForFences(device, 1, &vulkanSynchronize.fences[currentFrame], VK_TRUE, UINT16_MAX);
-    vkResetFences(device, 1, &vulkanSynchronize.fences[currentFrame]);
-    uint32_t imageIndex = PrepareFrame(device, swapchain, vulkanSynchronize.imageAcquired[currentFrame], recreateSwapchain, userData);
+    // vkWaitForFences(device, 1, &vulkanSynchronize.fences[currentFrame], VK_TRUE, UINT16_MAX);
+    // vkResetFences(device, 1, &vulkanSynchronize.fences[currentFrame]);
+    // uint32_t imageIndex = PrepareFrame(device, swapchain, vulkanSynchronize.imageAcquired[currentFrame], recreateSwapchain, userData);
     
-    RenderFrame(device, commandbuffers, vulkanQueue.graphics, vulkanSynchronize.imageAcquired[currentFrame], vulkanSynchronize.renderComplete[currentFrame], vulkanSynchronize.fences[currentFrame]);
+    // RenderFrame(device, commandbuffers, vulkanQueue.graphics, vulkanSynchronize.imageAcquired[currentFrame], vulkanSynchronize.renderComplete[currentFrame], vulkanSynchronize.fences[currentFrame]);
+    // VkResult result = SubmitFrame(device, imageIndex, swapchain, vulkanQueue.present, vulkanSynchronize.renderComplete[currentFrame], recreateSwapchain, userData);
+    vkWaitForFences(device, 1, &vulkanSynchronize.fences, VK_TRUE, UINT16_MAX);
+    vkResetFences(device, 1, &vulkanSynchronize.fences);
+    uint32_t imageIndex = 0;
+    PrepareFrame(device, swapchain, vulkanSynchronize.imageAcquired[currentFrame], imageIndex);
+    
+    RenderFrame(device, commandbuffers, vulkanQueue.graphics, vulkanSynchronize.imageAcquired[currentFrame], vulkanSynchronize.renderComplete[currentFrame], vulkanSynchronize.fences);
     VkResult result = SubmitFrame(device, imageIndex, swapchain, vulkanQueue.present, vulkanSynchronize.renderComplete[currentFrame], recreateSwapchain, userData);
 	if (recreateSwapchain && (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)) {
-		vkResetFences(device, 1, &vulkanSynchronize.fences[currentFrame]);
+		vkResetFences(device, 1, &vulkanSynchronize.fences);
 		recreateSwapchain(userData);
 	}
 	else if(VK_SUCCESS != result){

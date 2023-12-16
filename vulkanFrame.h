@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <vulkan/vulkan.h>
+#define SWAPCHAIN_FORMAT VK_FORMAT_B8G8R8A8_UNORM
 #define VK_CHECK(x)                                                 \
 do{                                                               \
         VkResult err = x;                                           \
@@ -59,7 +60,7 @@ struct VulkanWindows{
     VkRenderPass renderpass;
     VkSwapchainKHR swapchain;
     VkExtent2D swapchainExtent;
-    // std::vector<VkImage>swapchainImages;
+	std::vector<VkImage>swapchainImages;
     std::vector<VkFramebuffer>framebuffers;
     std::vector<VkImageView>swapchainImageViews;
 };
@@ -72,9 +73,10 @@ struct VulkanQueue{
     VkQueue graphics;
 };
 struct VulkanSynchronize{
-    std::vector<VkFence>fences;
-    std::vector<VkSemaphore>imageAcquired;
-    std::vector<VkSemaphore>renderComplete;
+    VkFence fences;
+    // std::vector<VkFence>fences;
+     std::vector<VkSemaphore>imageAcquired;
+     std::vector<VkSemaphore>renderComplete;
 };
 namespace vkf{
     static VkPhysicalDeviceMemoryProperties gMemoryProperties;
@@ -110,7 +112,7 @@ namespace vkf{
     VkResult CreateDescriptorSetLayout(VkDevice device, uint32_t setlayoutBindingCount, const VkDescriptorSetLayoutBinding *setlayoutBindings, VkDescriptorSetLayout *setlayout);
 
     VkResult RenderFrame(VkDevice device, const VkCommandBuffer&commandbuffers, VkQueue graphics, const VkSemaphore&imageAcquired, const VkSemaphore&renderComplete, const VkFence&fence = VK_NULL_HANDLE);
-    uint32_t PrepareFrame(VkDevice device, VkSwapchainKHR swapchain, const VkSemaphore&imageAcquired, void(*recreateSwapchain)(void* userData) = nullptr, void* userData = nullptr);
+    VkResult PrepareFrame(VkDevice device, VkSwapchainKHR swapchain, const VkSemaphore&imageAcquired, uint32_t &imageIndex);
     VkResult SubmitFrame(VkDevice device, uint32_t imageIndex, VkSwapchainKHR swapchain, const VkQueue present, const VkSemaphore&renderComplete, void(*recreateSwapchain)(void* userData) = nullptr, void* userData = nullptr);
     void DrawFrame(VkDevice device, uint32_t currentFrame, const VkCommandBuffer& commandbuffers, VkSwapchainKHR swapchain, const VulkanQueue&vulkanQueue, const VulkanSynchronize&vulkanSynchronize, void(*recreateSwapchain)(void* userData) = nullptr, void* userData = nullptr);
 

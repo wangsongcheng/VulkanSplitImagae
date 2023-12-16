@@ -5,6 +5,9 @@
 #include <unistd.h>
 #include <dirent.h>
 #endif
+#ifdef WIN32
+#include <Windows.h>
+#endif // WIN32
 
 #include "Split.h"
 
@@ -27,12 +30,14 @@ const uint32_t g_WindowWidth = 800, g_WindowHeight = g_WindowWidth;
 
 VkCommandBuffer g_CommandBuffer;
 
-bool g_ShowOpenFileUI;
+bool g_ShowOpenFileUI, g_ShowOpenFolderUI;
 void (*g_OpenFileFunCall)(const std::string&file);
 std::vector<const char *>g_FileTypeItem;
 
-Split g_Split;
-std::string g_ImageName;
+SplitImage g_Split;
+bool g_CompleteImage;
+bool g_ChangeTextureImage, g_Screenhot;
+std::string g_ImageName, g_SaveImageName, g_WindowName = "九宫格";
 // void createSurface(VkInstance instance, VkSurfaceKHR&surface, void* userData){
 //     glfwCreateWindowSurface(instance, (GLFWwindow *)userData, nullptr, &surface);
 // }
@@ -85,10 +90,148 @@ void getFileFromDirectory(const std::string&path, std::vector<std::string>&folde
     }
     closedir(d);
 #endif
+#ifdef WIN32
+    HANDLE hListFile;
+    CHAR szFilePath[MAX_PATH];
+    WIN32_FIND_DATA FindFileData;
+
+    lstrcpyA(szFilePath, path.c_str());
+
+    lstrcatA(szFilePath, "\\*");
+    hListFile = FindFirstFile(szFilePath, &FindFileData);
+    //判断句柄
+    if (hListFile == INVALID_HANDLE_VALUE){
+        printf("错误： %d\n", GetLastError());
+        return;
+    }
+    else{
+        do{
+            if(lstrcmp(FindFileData.cFileName,TEXT("."))==0 || lstrcmp(FindFileData.cFileName,TEXT(".."))==0){
+                continue;
+            }
+            //打印文件名、目录名
+            //printf("%s\t\t", FindFileData.cFileName);
+            //判断文件属性，是否为目录
+            if (FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY){
+                folder.push_back(FindFileData.cFileName);
+            }
+            else {
+                file.push_back(FindFileData.cFileName);
+            }
+        } while (FindNextFile(hListFile, &FindFileData));
+    }
+#endif // WIN32
+
 }
-//只有点击了取消或打开按钮才会返回false
-bool ShowOpenFileUI(const char *const *items, int items_count, std::string&result){
-    bool continueShow = true;
+bool ShowHomeDirectory(std::string&currentDir){
+    if(ImGui::BeginTable("常用路径", 1)){
+        ImGui::TableSetupColumn("主目录");
+        ImGui::TableHeadersRow();
+
+        ImGui::TableNextRow();
+
+        ImGui::TableSetColumnIndex(0);
+        // ImGui::TextUnformatted(r);
+        // ImGui::Button(r);
+#ifdef __linux
+        std::string homePaht = getenv("HOME");
+        std::vector<std::string>recentPath = { homePaht, homePaht + "/Desktop", homePaht + "/Documents", homePaht + "/Downloads", homePaht + "/Music", homePaht + "/Pictures", homePaht + "/Videos" };
+#endif
+#ifdef WIN32
+        std::string homePaht = getenv("USERPROFILE");
+        std::vector<std::string>recentPath = { homePaht, homePaht + "\\Desktop", homePaht + "\\Documents", homePaht + "\\Downloads", homePaht + "\\Music", homePaht + "\\Pictures", homePaht + "\\Videos" };
+#endif
+        for (size_t i = 0; i < recentPath.size(); ++i){
+            if(ImGui::Selectable(recentPath[i].c_str())){
+                currentDir = recentPath[i];
+
+                ImGui::EndTable();
+                ImGui::EndTable();
+                ImGui::End();
+                return true;
+            }
+        }
+        ImGui::EndTable();
+    }
+    return false;
+}
+void ShowFolderDirectory(const std::string&currentDir, std::vector<std::string>&subDir){
+    getSubdirectory(currentDir, subDir);
+    if(ImGui::BeginTable("各个文件路径名", subDir.size())){
+        for (size_t i = 0; i < subDir.size(); ++i){
+            ImGui::TableSetupColumn(subDir[i].c_str());
+        }
+        ImGui::TableHeadersRow();
+        ImGui::EndTable();
+    }
+}
+bool ShowFolderAndFile(const char *const *items, int fileTypeIndex, std::string&currentDir, std::vector<std::string>&subDir, std::string&selectedFile){
+    if(ImGui::Begin("文件名窗口", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_ChildWindow)){
+        ImGui::SetWindowSize(ImVec2(400, 200));
+        if(ImGui::BeginTable("文件名", 1)){
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            std::vector<std::string>file;
+            std::vector<std::string>folder;
+            getFileFromDirectory(currentDir, folder, file);
+            // ImGui::TextUnformatted(r);
+            for (size_t i = 0; i < folder.size(); ++i){
+#ifdef __linux
+                if(ImGui::Selectable((folder[i] + '/').c_str())){
+#endif
+#ifdef WIN32
+                if (ImGui::Selectable((folder[i] + '\\').c_str())) {
+#endif // WIN32
+
+                    subDir.push_back(folder[i]);
+                    splicingDirectory(subDir, currentDir);
+
+                    ImGui::EndTable();
+                    ImGui::EndChild();
+                    ImGui::EndTable();
+                    ImGui::End();
+                    return true;
+                }
+            }
+            if(fileTypeIndex){//指定栏类型
+                for (size_t i = 0; i < file.size(); ++i){
+                    std::size_t pos = file[i].find('.');
+                    std::size_t tPos = file[i].find('.', pos + 1);
+                    while(tPos < file[i].length()){
+                        pos = tPos;
+                        tPos = file[i].find('.', tPos + 1);
+                    }
+                    if(pos < file[i].length()){
+                        std::string s = file[i].substr(pos);
+                        if(s == items[fileTypeIndex] + 1){
+                            if(ImGui::Selectable(file[i].c_str())){
+                                selectedFile = currentDir + '/' + file[i];
+                            }
+                        }
+                    }
+                }
+            }
+            else{
+                for (size_t i = 0; i < file.size(); ++i){
+                    if(ImGui::Selectable(file[i].c_str())){
+#ifdef __linux                        
+                        selectedFile = currentDir + '/' + file[i];
+#endif
+#ifdef WIN32
+                        selectedFile = currentDir + '\\' + file[i];
+#endif
+                    }
+                }
+            }
+            ImGui::EndTable();
+        }
+        ImGui::EndChild();
+    }
+    return false;
+}
+bool ShowOpenFolderUI(const char *const *items, int items_count, std::string&result){
+    // bool continueShow = true;
     if(!ImGui::Begin("打开"/*, nullptr, ImGuiWindowFlags_NoResize*/)){
         ImGui::End();
         return true;
@@ -100,98 +243,98 @@ bool ShowOpenFileUI(const char *const *items, int items_count, std::string&resul
     static std::string currentDir = get_current_dir_name();
 #endif
 #ifdef WIN32
-    static std::string currentDir;
+    char directory[MAX_PATH] = { 0 };
+    GetCurrentDirectory(sizeof(directory), directory);
+    static std::string currentDir = directory;
 #endif
     if(ImGui::BeginTable("表_对齐", 2)){
-    //         char r[MAXBYTE] = { "./Show" };
         ImGui::TableNextColumn();
-        if(ImGui::BeginTable("常用路径", 1)){
-            ImGui::TableSetupColumn("主目录");
-            ImGui::TableHeadersRow();
-
-            ImGui::TableNextRow();
-
-            ImGui::TableSetColumnIndex(0);
-            // ImGui::TextUnformatted(r);
-            // ImGui::Button(r);
+        if(ShowHomeDirectory(currentDir)){
+            return true;
+        }
+        ImGui::TableNextColumn();
+        ShowFolderDirectory(currentDir, subDir);
+        if(ShowFolderAndFile(items, fileTypeIndex, currentDir, subDir, selectedFile)){
+            return true;
+        }
+        ImGui::EndTable();
+    }
+    ImVec2 windowSize = ImGui::GetWindowSize();    
+    static char fileName[1000] = "/";
+    if((selectedFile == "" || selectedFile.c_str() != currentDir) && !strchr(selectedFile.c_str(), '.'))
+    // if(selectedFile == "" || strcmp(selectedFile.c_str(), fileName))
+        selectedFile = currentDir;
+    memset(fileName, 0, sizeof(fileName));
+    memcpy(fileName, selectedFile.c_str(), sizeof(char) * selectedFile.size());
+    if(ImGui::InputText("选择保存的文件或文件夹", fileName, 999)){
+        selectedFile = fileName;
+    }
+    ImGui::SetCursorPos(ImVec2(0, windowSize.y - 70));
+    if(ImGui::BeginTable("返回上级_类型_表", 2)){
+        ImGui::TableNextColumn();
+        if(ImGui::Button("返回上级")){
+            if(subDir.size() > 1){
+                subDir.pop_back();
+                splicingDirectory(subDir, currentDir);
+            }
+        }
+        ImGui::TableNextColumn();ImGui::Combo("类型", &fileTypeIndex, items, items_count);
+        ImGui::EndTable();
+    }
+    ImGui::SetCursorPos(ImVec2(0, windowSize.y - 40));
+    if(ImGui::Button("取消")){
+        memset(fileName, 0, sizeof(fileName));
+        selectedFile = "";
+        ImGui::End();
+        return false;
+    }
+    ImGui::SetCursorPos(ImVec2(40, windowSize.y - 40));
+    if(ImGui::Button("保存")){
+        if(selectedFile != ""){
+            result = selectedFile;
+            memset(fileName, 0, sizeof(fileName));
+            selectedFile = "";
+            ImGui::End();
+            return false;
+        }
+        else{
+            result = currentDir;
+            memset(fileName, 0, sizeof(fileName));
+            selectedFile = "";
+            ImGui::End();
+            return false;
+        }
+    }
+    ImGui::End();
+    return true;
+}
+//只有点击了取消或打开按钮才会返回false
+bool ShowOpenFileUI(const char *const *items, int items_count, std::string&result){
+    // bool continueShow = true;
+    if(!ImGui::Begin("打开"/*, nullptr, ImGuiWindowFlags_NoResize*/)){
+        ImGui::End();
+        return true;
+    }
+    static int fileTypeIndex = items_count - 1;
+    std::vector<std::string> subDir;
+    static std::string selectedFile;
 #ifdef __linux
-            std::string homePaht = getenv("HOME");
-            std::vector<std::string>recentPath = { homePaht, homePaht + "/Desktop", homePaht + "/Documents", homePaht + "/Downloads", homePaht + "/Music", homePaht + "/Pictures", homePaht + "/Videos" };
+    static std::string currentDir = get_current_dir_name();
 #endif
 #ifdef WIN32
-            std::vector<std::string>recentPath;
+    char directory[MAX_PATH] = { 0 };
+    GetCurrentDirectory(sizeof(directory), directory);
+    static std::string currentDir = directory;
 #endif
-            for (size_t i = 0; i < recentPath.size(); ++i){
-                if(ImGui::Selectable(recentPath[i].c_str())){
-                    currentDir = recentPath[i];
-
-                    ImGui::EndTable();
-                    ImGui::EndTable();
-                    ImGui::End();
-                    return true;
-                }
-            }
-            ImGui::EndTable();
+    if(ImGui::BeginTable("表_对齐", 2)){
+        ImGui::TableNextColumn();
+        if(ShowHomeDirectory(currentDir)){
+            return true;
         }
         ImGui::TableNextColumn();
-        getSubdirectory(currentDir, subDir);
-        if(ImGui::BeginTable("各个文件路径名", subDir.size())){
-            for (size_t i = 0; i < subDir.size(); ++i){
-                ImGui::TableSetupColumn(subDir[i].c_str());
-            }
-            ImGui::TableHeadersRow();
-            ImGui::EndTable();
-        }
-        if(ImGui::Begin("文件名窗口", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_ChildWindow)){
-            ImGui::SetWindowSize(ImVec2(400, 200));
-            if(ImGui::BeginTable("文件名", 1)){
-                ImGui::TableNextRow();
-
-                ImGui::TableSetColumnIndex(0);
-                std::vector<std::string>file;
-                std::vector<std::string>folder;
-                getFileFromDirectory(currentDir, folder, file);
-                // ImGui::TextUnformatted(r);
-                for (size_t i = 0; i < folder.size(); ++i){
-                    if(ImGui::Selectable((folder[i] + '/').c_str())){
-                        subDir.push_back(folder[i]);
-                        splicingDirectory(subDir, currentDir);
-
-                        ImGui::EndTable();
-                        ImGui::EndChild();
-                        ImGui::EndTable();
-                        ImGui::End();
-                        return true;
-                    }
-                }
-                if(fileTypeIndex){//指定栏类型
-                    for (size_t i = 0; i < file.size(); ++i){
-                        std::size_t pos = file[i].find('.');
-                        std::size_t tPos = file[i].find('.', pos + 1);
-                        while(tPos < file[i].length()){
-                            pos = tPos;
-                            tPos = file[i].find('.', tPos + 1);
-                        }
-                        if(pos < file[i].length()){
-                            std::string s = file[i].substr(pos);
-                            if(s == items[fileTypeIndex] + 1){
-                                if(ImGui::Selectable(file[i].c_str())){
-                                    selectedFile = currentDir + '/' + file[i];
-                                }
-                            }
-                        }
-                    }
-                }
-                else{
-                    for (size_t i = 0; i < file.size(); ++i){
-                        if(ImGui::Selectable(file[i].c_str())){
-                            selectedFile = currentDir + '/' + file[i];
-                        }
-                    }
-                }
-                ImGui::EndTable();
-            }
-            ImGui::EndChild();
+        ShowFolderDirectory(currentDir, subDir);
+        if(ShowFolderAndFile(items, fileTypeIndex, currentDir, subDir, selectedFile)){
+            return true;
         }
         ImGui::EndTable();
     }
@@ -229,9 +372,7 @@ bool ShowOpenFileUI(const char *const *items, int items_count, std::string&resul
 }
 void OpenImage(const std::string &file){
     g_ImageName = file;
-    g_Split.ChangeTextureImage(g_VulkanDevice.device, file, g_WindowWidth, g_WindowHeight, g_VulkanQueue.graphics, g_VulkanPool.commandPool);
-    g_Split.UpdateUniform(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
-    g_Split.UpdateDescriptorSet(g_VulkanDevice.device);
+    g_ChangeTextureImage = true;
     // VkExtent2D source, size;
     // void *data = g_Split.LoadTextureImage(g_VulkanDevice.device, file, source, g_VulkanQueue.graphics, g_VulkanPool.commandPool);
     // if(data){
@@ -248,13 +389,27 @@ void OpenImage(const std::string &file){
     //     g_Split.UpdateDescriptorSet(g_VulkanDevice.device);
     // }
 }
+void SaveImage(const std::string &file){
+    if(g_CompleteImage){
+        g_Screenhot = true;
+        g_SaveImageName = file;
+    }
+    else{
+        g_Split.WriteImageToFolder(file);
+    }
+}
+bool MessageBox(const std::string&message, const std::string&title){
+    if(ImGui::Begin(title.c_str())){
+        ImGui::Text(message.c_str());
+        if(ImGui::Button("确定")){
+            ImGui::End();
+            return false;
+        }
+        ImGui::End();
+    }
+    return true;
+}
 /*{{{*/
-// float g_DeltaTime = 0.0f;
-// float g_LastFrame = 0.0f;
-// float camX;
-// float camY;
-// float camZ;
-// glm::vec3 rotateAxis = glm::vec3(0, -1, 0);
 void updateImguiWidget(){
     // static bool checkbuttonstatu;//检查框的状态。这个值传给imgui会影响到检查框
     ImGui_ImplGlfw_NewFrame();
@@ -262,6 +417,9 @@ void updateImguiWidget(){
     
     // static double test = 0;
     // ImGui::DragInt("拖动条", &test);//确实可以拖动。但不是类似一条线中间有个圆的样子
+    static int rowAndcolumn[2] = { 3, 3 };
+    static bool bShowMessageBox = false;
+    static std::string messageboxTitle = "提示", messageboxMessage;
     if(ImGui::BeginMainMenuBar()){
         if(ImGui::BeginMenu("文件")){
             if(ImGui::MenuItem("打开")){
@@ -276,9 +434,44 @@ void updateImguiWidget(){
                 g_FileTypeItem.push_back("*.jpg");
                 g_FileTypeItem.push_back("*.png");
             }
-            if(ImGui::MenuItem("保存")){
+            if(ImGui::BeginMenu("保存")){
+                if(ImGui::MenuItem("散图")){
+                    g_CompleteImage = false;
+                    g_ShowOpenFolderUI = true;
+                    g_OpenFileFunCall = SaveImage;
+                    g_FileTypeItem.push_back("*.*");
+                }
+                if(ImGui::MenuItem("完整")){
+                    g_CompleteImage = true;
+                    g_ShowOpenFolderUI = true;
+                    g_OpenFileFunCall = SaveImage;
+                    g_FileTypeItem.push_back("*.*");
+                    g_FileTypeItem.push_back("*.gif");
+                    g_FileTypeItem.push_back("*.bmp");
+                    g_FileTypeItem.push_back("*.jpg");
+                    g_FileTypeItem.push_back("*.png");
+                }
+                ImGui::EndMenu();
             }
-            if(ImGui::MenuItem("另存为")){
+            if(ImGui::BeginMenu("另存为")){
+                if(ImGui::MenuItem("散图")){
+                    g_CompleteImage = false;
+                    g_ShowOpenFolderUI = true;
+                    g_OpenFileFunCall = SaveImage;
+                    g_FileTypeItem.push_back("*.*");
+                }
+                if(ImGui::MenuItem("完整")){
+                    g_CompleteImage = true;
+                    g_ShowOpenFolderUI = true;
+                    g_OpenFileFunCall = SaveImage;
+                    g_FileTypeItem.push_back("*.*");
+                    g_FileTypeItem.push_back("*.gif");
+                    g_FileTypeItem.push_back("*.bmp");
+                    g_FileTypeItem.push_back("*.jpg");
+                    g_FileTypeItem.push_back("*.png");
+                    
+                }
+                ImGui::EndMenu();
             }
             // if(ImGui::BeginMenu("新建")){
             //     if(ImGui::MenuItem("打开")){
@@ -295,27 +488,49 @@ void updateImguiWidget(){
             if(ImGui::MenuItem("重置")){
                 // g_Split.ResetImageIndex();
                 OpenImage(g_ImageName);
-                g_Split.UpdateUniform(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
+            }
+            if(ImGui::MenuItem("导入")){
+                //导入的肯定是小图。因为要导入大图的话，应该从文件->打开那里导入
             }
             ImGui::EndMenu();
         }
-        // if(ImGui::BeginMenu("摄像机")){
-        //     if(ImGui::BeginMenu("视角")){
-        //         if(ImGui::MenuItem("重置")){
-        //             g_CameraPos = g_Pos;
-        //             g_Up = glm::vec3(0, 1, 0);
-        //             g_RotateBase = glm::mat4(1.0f);
-        //             UpdateUniform(g_VulkanDevice.device);
-        //         }
-        //         ImGui::EndMenu();
-        //     }
-        //     ImGui::EndMenu();
-        // }
+        if(ImGui::BeginMenu("选择")){
+            if(ImGui::MenuItem("拼图")){
+                if(g_Split.IsLoadTexture()){
+                    g_WindowName = "拼图";
+                    g_Split.SetSplitType(JIGSAW);
+                    rowAndcolumn[0] = 4;
+                    rowAndcolumn[1] = 3;
+                    g_Split.SetRow(rowAndcolumn[0]);
+                    g_Split.SetColumn(rowAndcolumn[1]);
+                    OpenImage(g_ImageName);
+                }
+                else{
+                    bShowMessageBox = true;
+                    messageboxMessage = "请先添加图片后再试";
+                }
+            }
+            if(ImGui::MenuItem("九宫格")){
+                if(g_Split.IsLoadTexture()){
+                    g_WindowName = "九宫格";
+                    g_Split.SetSplitType(AAIGNED);
+                    rowAndcolumn[0] = 3;
+                    rowAndcolumn[1] = 3;
+                    g_Split.SetRow(rowAndcolumn[0]);
+                    g_Split.SetColumn(rowAndcolumn[1]);
+                    OpenImage(g_ImageName);
+                }
+                else{
+                    bShowMessageBox = true;
+                    messageboxMessage = "请先添加图片后再试";
+                }
+            }
+            ImGui::EndMenu();
+        }
         ImGui::EndMainMenuBar();
     }
-    static int rowAndcolumn[2] = { 3, 3 };
     static float backgroundColor[3] = { 1, 1, 1 };
-    if(ImGui::Begin("九宫格")){
+    if(ImGui::Begin(g_WindowName.c_str())){
         if(ImGui::InputInt2("行列", rowAndcolumn)){
             g_Split.SetRow(rowAndcolumn[0]);
             g_Split.SetColumn(rowAndcolumn[1]);
@@ -329,7 +544,22 @@ void updateImguiWidget(){
     if(g_ShowOpenFileUI){
         std::string file = "";
         g_ShowOpenFileUI = ShowOpenFileUI(g_FileTypeItem.data(), g_FileTypeItem.size(), file);
-        if(file != "" && g_OpenFileFunCall)g_OpenFileFunCall(file);
+        if(file != "" && g_OpenFileFunCall){
+            g_OpenFileFunCall(file);
+            g_FileTypeItem.clear();
+        }
+    }
+    if(g_ShowOpenFolderUI){
+        std::string file = "";
+        g_ShowOpenFolderUI = ShowOpenFolderUI(g_FileTypeItem.data(), g_FileTypeItem.size(), file);
+        if(file != "" && g_OpenFileFunCall){
+            g_OpenFileFunCall(file);
+            g_FileTypeItem.clear();
+        }
+    }
+    if(bShowMessageBox){
+        bShowMessageBox = MessageBox(messageboxMessage, messageboxTitle);
+        if(!bShowMessageBox)messageboxMessage = "";
     }
     ImGui::Render();
     ImDrawData *draw_data = ImGui::GetDrawData();
@@ -362,7 +592,12 @@ void setupVulkan(GLFWwindow *window){
     const char** instanceExtension = glfwGetRequiredInstanceExtensions(&count);
     std::vector<const char*> extensions(instanceExtension, instanceExtension + count);
     VK_CHECK(vkf::CreateInstance(extensions, g_VulkanDevice.instance));
+#ifdef WIN32
+    g_VulkanDevice.physicalDevice = vkf::GetPhysicalDevices(g_VulkanDevice.instance);
+#else
     g_VulkanDevice.physicalDevice = vkf::GetPhysicalDevices(g_VulkanDevice.instance, VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU);
+#endif // WIN32
+
     vkf::CreateDebugUtilsMessenger(g_VulkanDevice.instance, g_VulkanMessenger, debugUtilsMessenger);
     glfwCreateWindowSurface(g_VulkanDevice.instance, window, nullptr, &g_VulkanWindows.surface);
     vkf::CreateDevice(g_VulkanDevice.physicalDevice, {}, g_VulkanWindows.surface, g_VulkanDevice.device);
@@ -375,7 +610,7 @@ void setupVulkan(GLFWwindow *window){
     vkf::CreateCommandPool(g_VulkanDevice.physicalDevice, g_VulkanDevice.device, g_VulkanPool.commandPool, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
     vkf::CreateFrameBufferForSwapchain(g_VulkanDevice.device, { g_WindowWidth, g_WindowHeight }, g_VulkanWindows);
     vkf::CreateSemaphoreAndFenceForSwapchain(g_VulkanDevice.device, g_VulkanWindows.swapchainImageViews.size(), g_VulkanSynchronize);
-    vkf::CreateDescriptorPool(g_VulkanDevice.device, 3, g_VulkanPool.descriptorPool);
+    vkf::CreateDescriptorPool(g_VulkanDevice.device, 6, g_VulkanPool.descriptorPool);
     //显示设备信息
     const char *deviceType;
     VkPhysicalDeviceProperties physicalDeviceProperties;
@@ -400,11 +635,14 @@ void setupVulkan(GLFWwindow *window){
 	printf("gpu name:%s, gpu type:%s\n", physicalDeviceProperties.deviceName, deviceType);
 }
 void cleanupVulkan(){
-    for (size_t i = 0; i < g_VulkanSynchronize.fences.size(); ++i){
-        vkDestroyFence(g_VulkanDevice.device, g_VulkanSynchronize.fences[i], nullptr);
-        vkDestroySemaphore(g_VulkanDevice.device, g_VulkanSynchronize.imageAcquired[i], nullptr);
-        vkDestroySemaphore(g_VulkanDevice.device, g_VulkanSynchronize.renderComplete[i], nullptr);
-    }
+     for (size_t i = 0; i < g_VulkanSynchronize.imageAcquired.size(); ++i){
+         //vkDestroyFence(g_VulkanDevice.device, g_VulkanSynchronize.fences[i], nullptr);
+         vkDestroySemaphore(g_VulkanDevice.device, g_VulkanSynchronize.imageAcquired[i], nullptr);
+         vkDestroySemaphore(g_VulkanDevice.device, g_VulkanSynchronize.renderComplete[i], nullptr);
+     }
+    vkDestroyFence(g_VulkanDevice.device, g_VulkanSynchronize.fences, nullptr);
+    //vkDestroySemaphore(g_VulkanDevice.device, g_VulkanSynchronize.imageAcquired[], nullptr);
+    //vkDestroySemaphore(g_VulkanDevice.device, g_VulkanSynchronize.renderComplete, nullptr);
     for (size_t i = 0; i < g_VulkanWindows.framebuffers.size(); ++i){
         vkDestroyImageView(g_VulkanDevice.device, g_VulkanWindows.swapchainImageViews[i], nullptr);
         vkDestroyFramebuffer(g_VulkanDevice.device, g_VulkanWindows.framebuffers[i], nullptr);
@@ -432,28 +670,33 @@ void keyboard(GLFWwindow *window, int key, int scancode, int action, int mods){
 bool g_LeftDown;
 uint32_t g_SelectImageIndex;
 void mousecursorpos(GLFWwindow *window, double xpos, double ypos){
+    if(g_ShowOpenFileUI || g_ShowOpenFolderUI)return;
     uint32_t index;
     const glm::vec3 size = g_Split.GetImageSize() * glm::vec3(1.05, 1.05, 1);
     if(g_LeftDown){
-        if(g_SelectImageIndex != -1 && g_Split.mousecursor(xpos, ypos, index)){
+        if(g_SelectImageIndex != -1){
             g_Split.UpdateTexture(g_VulkanDevice.device, g_SelectImageIndex, glm::vec3(xpos - size.x * .5, ypos - size.y * .5, 0), size);
         }
     }
     else{
         if(g_Split.mousecursor(xpos, ypos, index)){
             const glm::vec3 pos = g_Split.GetImagePos(index);
-            if(g_SelectImageIndex != -1){
+            if(g_SelectImageIndex != -1 && g_SelectImageIndex != index){
                 // g_Split.SwapImage(g_SelectImageIndex, index);
                 g_Split.SwapImage(g_VulkanDevice.device, g_VulkanQueue.graphics, g_VulkanPool.commandPool, g_SelectImageIndex, index);
+                g_Split.UpdateDescriptorSet(g_VulkanDevice.device);
+                // g_Split.RerodOffscreenCommand();
                 g_Split.UpdateUniform(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
                 g_SelectImageIndex = -1;
             }
             else{
+                g_SelectImageIndex = -1;
                 g_Split.UpdateUniform(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
                 g_Split.UpdateTexture(g_VulkanDevice.device, index, pos, size);
             }
         }
         else{
+            g_SelectImageIndex = -1;
             g_Split.UpdateUniform(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
         }
     }
@@ -465,15 +708,21 @@ void mousebutton(GLFWwindow *window, int button, int action, int mods) {
         glfwGetCursorPos(window, &xpos, &ypos);
         if(!g_Split.mousecursor(xpos, ypos, g_SelectImageIndex)){
             g_SelectImageIndex = -1;
+            g_LeftDown = false;
         }
     }
 }
 void RecordCommand(uint32_t currentFrame){
-    vkf::tool::BeginCommands(g_CommandBuffer, VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
+    vkf::tool::BeginCommands(g_CommandBuffer, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     vkf::tool::BeginRenderPassGeneral(g_CommandBuffer, g_VulkanWindows.framebuffers[currentFrame], g_VulkanWindows.renderpass, g_WindowWidth, g_WindowHeight);
     g_Split.Draw(g_CommandBuffer, g_WindowWidth, g_WindowHeight);
     updateImguiWidget();
     vkCmdEndRenderPass(g_CommandBuffer);
+    // VkClearValue clearValues = {};
+    // clearValues.color = { 0, 0, 0, 1.0f };
+    // vkf::tool::BeginRenderPass(g_CommandBuffer, g_VulkanWindows.framebuffers[currentFrame], g_VulkanWindows.renderpass, g_WindowWidth * .25, g_WindowHeight * .25, 1, &clearValues, g_WindowWidth - g_WindowWidth * .25);
+    // g_Split.DrawDebug(g_CommandBuffer, g_WindowWidth, g_WindowHeight);
+    // vkCmdEndRenderPass(g_CommandBuffer);
     VK_CHECK(vkEndCommandBuffer(g_CommandBuffer));
 }
 void setup(GLFWwindow *windows){
@@ -521,6 +770,8 @@ void setup(GLFWwindow *windows){
     ImGui_ImplVulkan_DestroyFontUploadObjects();
 
     vkf::tool::AllocateCommandBuffers(g_VulkanDevice.device, g_VulkanPool.commandPool, 1, &g_CommandBuffer);
+
+    g_Split.RerodOffscreenCommand(glm::vec3(1, 1, 1));
 }
 void cleanup(){
     vkDeviceWaitIdle(g_VulkanDevice.device);
@@ -541,22 +792,21 @@ void cleanup(){
 void display(GLFWwindow* window){
     static size_t currentFrame;
     vkDeviceWaitIdle(g_VulkanDevice.device);
+    if(g_Screenhot){
+        g_Screenhot = false;
+        g_Split.WriteImageToFile(g_VulkanDevice.physicalDevice, g_VulkanDevice.device, g_VulkanQueue.graphics, g_VulkanPool.commandPool, g_SaveImageName);
+    }
+    if(g_ChangeTextureImage){
+        g_ChangeTextureImage = false;
+        g_Split.ChangeTextureImage(g_VulkanDevice.device, g_ImageName, g_WindowWidth, g_WindowHeight, g_VulkanQueue.graphics, g_VulkanPool.commandPool);
 
+        g_Split.UpdateDescriptorSet(g_VulkanDevice.device);
+        g_Split.UpdateUniform(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
+        // g_Split.RerodOffscreenCommand(glm::vec3(1, 1, 1));
+    }
     RecordCommand(currentFrame);
-    vkf::DrawFrame(g_VulkanDevice.device, currentFrame, g_CommandBuffer, g_VulkanWindows.swapchain, g_VulkanQueue, g_VulkanSynchronize);
-    // if(GLFW_PRESS == glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT)){
-    //     int id = 0;
-    //     double xpos, ypos;
-    //     glfwGetCursorPos(window, &xpos, &ypos);
-    //     if(id = ((PickingTexture *)g_Base)->ReadPixel(g_VulkanDevice.device, g_VulkanQueue.graphics, g_VulkanPool.commandPool, xpos, ypos)){
-    //         if(id != 0){
-    //             printf("time:%f:选中模型, id = %d\n", glfwGetTime(), id);
-    //         }
-    //     }
-    //     else{
-    //         printf("time:%f:未选中模型, id = %d\n", glfwGetTime(), id);
-    //     }
-    // }
+    // vkf::DrawFrame(g_VulkanDevice.device, currentFrame, g_CommandBuffer, g_VulkanWindows.swapchain, g_VulkanQueue, g_VulkanSynchronize);
+    g_Split.DrawFrame(g_VulkanDevice.device, currentFrame, g_CommandBuffer, g_VulkanWindows.swapchain, g_VulkanQueue, g_VulkanSynchronize);
     currentFrame = (currentFrame + 1) % g_VulkanWindows.framebuffers.size();
 }
 int main(){

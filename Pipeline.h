@@ -89,6 +89,9 @@ public:
     // virtual void DestrotyShader(VkDevice device);
     //virtual void DestrotyShader(VkDevice device, const std::vector<Shader>::iterator&it);
     virtual void GetCacheData(VkDevice device, std::vector<uint32_t>&cacheData);
+    // bool IsCreate(){
+    //     return mPipeline != VK_NULL_HANDLE;
+    // }
     inline void SetCache(VkPipelineCache&cache){
         mCache = cache;
     }
@@ -246,7 +249,7 @@ public:
         }
         // ++mViewportCount;
     }
-    inline void PushScissor(uint32_t width, uint32_t height, VkOffset2D offset = {}){
+    inline void PushScissor(uint32_t width, uint32_t height, const VkOffset2D&offset = {}){
         VkRect2D rect;
         rect.offset = offset;
         rect.extent.width = width;
