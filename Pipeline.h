@@ -56,7 +56,7 @@ struct Shader{
 class Pipeline{
 protected:
     VkPipeline mPipeline;
-    VkPipelineCache mCache;
+    // VkPipelineCache mCache;
     VkPipelineLayout mLayout;
     std::vector<Shader>mShaders;
     // std::vector<uint32_t>mSetLayoutBindingIndex;
@@ -78,26 +78,23 @@ public:
     virtual void BindDescriptorSet(VkCommandBuffer cmd, VkDescriptorSet&set, uint32_t firstSet = 0, uint32_t descriptorSetCount = 1)const;
     virtual void BindDescriptorSet(VkCommandBuffer cmd, VkDescriptorSet&set, uint32_t dynamicOffsetCount, const uint32_t *pDynamicOffsets, uint32_t descriptorSetCount = 1)const;
     virtual void BindDescriptorSet(VkCommandBuffer cmd, VkPipelineBindPoint pipelineBindPoint, VkDescriptorSet&set, uint32_t firstSet = 0, uint32_t dynamicOffsetCount = 0, const uint32_t *pDynamicOffsets = nullptr, uint32_t descriptorSetCount = 1)const;
-    virtual VkResult CreateCache(VkDevice device, const std::vector<uint32_t>&cacheData);
+    // virtual VkResult CreateCache(VkDevice device, const std::vector<uint32_t>&cacheData);
     // virtual VkResult CreateDescriptorSetLayout(VkDevice device);
     virtual VkResult CreateLayout(VkDevice device, const std::vector<VkDescriptorSetLayout>&setlayouts);
     //virtual void DeleteShader(VkDevice device, VkShaderStageFlags stage);
-    virtual void DestroyCache(VkDevice device, std::vector<uint32_t>&cacheData);
+    // virtual void DestroyCache(VkDevice device, std::vector<uint32_t>&cacheData);
     virtual void DestroyLayout(VkDevice device);
     virtual void DestroyPipeline(VkDevice device);
     // virtual void DestroySetLayout(VkDevice device);
     // virtual void DestrotyShader(VkDevice device);
     //virtual void DestrotyShader(VkDevice device, const std::vector<Shader>::iterator&it);
-    virtual void GetCacheData(VkDevice device, std::vector<uint32_t>&cacheData);
-    // bool IsCreate(){
-    //     return mPipeline != VK_NULL_HANDLE;
+    // virtual void GetCacheData(VkDevice device, std::vector<uint32_t>&cacheData);
+    // inline void SetCache(VkPipelineCache&cache){
+    //     mCache = cache;
     // }
-    inline void SetCache(VkPipelineCache&cache){
-        mCache = cache;
-    }
-    inline VkPipelineCache GetCache(){
-        return mCache;
-    }
+    // inline VkPipelineCache GetCache(){
+    //     return mCache;
+    // }
     inline auto ShaderBegin()const{
         return mShaders.begin();
     }
@@ -130,7 +127,7 @@ public:
     virtual void PushShader(VkDevice device, VkShaderStageFlags stage, const std::string&file);
     virtual void PushShader(VkDevice device, VkShaderStageFlags stage, const std::vector<uint32_t>& code);
 
-    virtual VkResult CreatePipeline(VkDevice device, VkRenderPass& renderPass) = 0;
+    virtual VkResult CreatePipeline(VkDevice device, VkRenderPass renderPass, VkPipelineCache cache) = 0;
 
     virtual void BindPipeline(VkCommandBuffer cmd)const{
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipeline);
@@ -138,7 +135,6 @@ public:
 };
 struct GraphicsPipelineStateInfo{
     //std::string name;
-    uint32_t ColorBlendStateAttachmentCount = 1;
     VkPipelineColorBlendAttachmentState mColorBlend{};
     VkPipelineMultisampleStateCreateInfo mMultisample{};
     VkPipelineDepthStencilStateCreateInfo mDepthStencil{};
@@ -249,7 +245,7 @@ public:
         }
         // ++mViewportCount;
     }
-    inline void PushScissor(uint32_t width, uint32_t height, const VkOffset2D&offset = {}){
+    inline void PushScissor(uint32_t width, uint32_t height, VkOffset2D offset = {}){
         VkRect2D rect;
         rect.offset = offset;
         rect.extent.width = width;
@@ -280,7 +276,7 @@ public:
 
     // virtual void DrawUI();
     // virtual void DrawShaderUI(const ShaderInfo&shader);
-    virtual VkResult CreatePipeline(VkDevice device, VkRenderPass&renderPass);
+    virtual VkResult CreatePipeline(VkDevice device, VkRenderPass renderPass, VkPipelineCache cache);
     //virtual void IncreaseShader(VkDevice device, const std::vector<uint32_t>&code);
 };
 #endif

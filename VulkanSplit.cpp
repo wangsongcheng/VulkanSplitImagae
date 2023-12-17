@@ -109,14 +109,16 @@ void VulkanSplit::DrawImage(VkCommandBuffer command, uint32_t windowWidth, uint3
         DrawGraphics(command, &mRect);
     }
 }
+#ifdef OFFSCREEN_DEBUG
 void VulkanSplit::DrawDebug(VkCommandBuffer command, uint32_t windowWidth, uint32_t windowHeight){
-    // uint32_t dynamicOffset = 0;
-    // const glm::mat4 projection = glm::ortho(0.0f, (float)windowWidth * .25f, 0.0f, (float)windowHeight * .25f, -1.0f, 1.0f);
-    // pipelines.debug.BindPipeline(command);
-    // pipelines.debug.BindDescriptorSet(command, descriptorset.debug, 1, &dynamicOffset);
-    // pipelines.debug.PushPushConstant(command, VK_SHADER_STAGE_VERTEX_BIT, sizeof(glm::mat4), &projection);
-    // DrawGraphics(command, &mRect);
+    uint32_t dynamicOffset = 0;
+    const glm::mat4 projection = glm::ortho(0.0f, (float)windowWidth * .25f, 0.0f, (float)windowHeight * .25f, -1.0f, 1.0f);
+    pipelines.debug.BindPipeline(command);
+    pipelines.debug.BindDescriptorSet(command, descriptorset.debug, 1, &dynamicOffset);
+    pipelines.debug.PushPushConstant(command, VK_SHADER_STAGE_VERTEX_BIT, sizeof(glm::mat4), &projection);
+    DrawGraphics(command, &mRect);
 }
+#endif
 VulkanSplit::VulkanSplit(/* args */)
 {
 }
@@ -191,12 +193,13 @@ void VulkanSplit::Setup(VkPhysicalDevice physicalDevice, VkDevice device, VkQueu
 
     uniform.background.CreateBuffer(device, sizeof(glm::mat4), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     uniform.background.AllocateAndBindMemory(device, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+#ifdef OFFSCREEN_DEBUG
+    uniform.debug.CreateBuffer(device, sizeof(glm::mat4), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    uniform.debug.AllocateAndBindMemory(device, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-    // uniform.debug.CreateBuffer(device, sizeof(glm::mat4), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-    // uniform.debug.AllocateAndBindMemory(device, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-    // const glm::mat4 model = glm::scale(glm::mat4(1), glm::vec3(800 * .25, 800 * .25, 1));
-    // uniform.debug.UpdateData(device, &model);
+    const glm::mat4 model = glm::scale(glm::mat4(1), glm::vec3(800 * .25, 800 * .25, 1));
+    uniform.debug.UpdateData(device, &model);
+#endif
 
     uniform.offscreenBackground.CreateBuffer(device, sizeof(glm::mat4), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     uniform.offscreenBackground.AllocateAndBindMemory(device, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
@@ -210,8 +213,9 @@ void VulkanSplit::Setup(VkPhysicalDevice physicalDevice, VkDevice device, VkQueu
 
     vkf::tool::AllocateDescriptorSets(device, pool.descriptorPool, &mSetLayout, 1, &descriptorset.offscreenPosition);
     vkf::tool::AllocateDescriptorSets(device, pool.descriptorPool, &mSetLayout, 1, &descriptorset.offscreenBackground);
-    // vkf::tool::AllocateDescriptorSets(device, pool.descriptorPool, &mSetLayout, 1, &descriptorset.debug);
-
+#ifdef OFFSCREEN_DEBUG
+    vkf::tool::AllocateDescriptorSets(device, pool.descriptorPool, &mSetLayout, 1, &descriptorset.debug);
+#endif
     vkf::tool::AllocateCommandBuffers(device, pool.commandPool, 1, &offscreenPass.command);
 
     VkSemaphoreCreateInfo info = {};
@@ -277,50 +281,23 @@ void VulkanSplit::RerodOffscreenCommand(const glm::vec3 &color){
 }
 
 void VulkanSplit::DestroyGraphicsPipeline(VkDevice device){
-    std::vector<uint32_t>cacheData;
-    pipelines.background.DestroyCache(device, cacheData);
-    vkf::tool::WriteFileContent("BackgroundPipelineCache", cacheData.data(), cacheData.size() * sizeof(uint32_t)); 
-    pipelines.background.DestroyLayout(device);
-    pipelines.background.DestroyPipeline(device);
+    vkf::DestroyPipelineCache(device, "GraphicsPipelineCache", mPipelineCache);
 
-    pipelines.pipeline.DestroyCache(device, cacheData);
-    vkf::tool::WriteFileContent("GraphicsPipelineCache", cacheData.data(), cacheData.size() * sizeof(uint32_t)); 
-    pipelines.pipeline.DestroyLayout(device);
-    pipelines.pipeline.DestroyPipeline(device);
-
-    pipelines.offscreen.DestroyCache(device, cacheData);
-    vkf::tool::WriteFileContent("OffscreenPipelineCache", cacheData.data(), cacheData.size() * sizeof(uint32_t)); 
     pipelines.offscreen.DestroyLayout(device);
     pipelines.offscreen.DestroyPipeline(device);
 
-    pipelines.offscreenBackground.DestroyCache(device, cacheData);
-    vkf::tool::WriteFileContent("OffscreenColorPipelineCache", cacheData.data(), cacheData.size() * sizeof(uint32_t)); 
+    pipelines.background.DestroyLayout(device);
+    pipelines.background.DestroyPipeline(device);
+
+    pipelines.pipeline.DestroyLayout(device);
+    pipelines.pipeline.DestroyPipeline(device);
+
     pipelines.offscreenBackground.DestroyLayout(device);
     pipelines.offscreenBackground.DestroyPipeline(device);
 }
 
 void VulkanSplit::CreateGraphicsPipeline(VkDevice device, VkRenderPass renderpass, uint32_t scissorWidth, uint32_t scissorHeight){
-    std::vector<uint32_t>cacheData;
-    // vkf::tool::GetFileContent("OffscreenPipelineCache", cacheData);
-    // VkRect2D rect = {};
-    // rect.extent.width = scissorWidth * .25;
-    // rect.extent.height = scissorHeight * .25;
-    // rect.offset.x = scissorWidth - scissorWidth * .25;
-    // pipelines.debug.PushScissor(&rect);
-    // pipelines.debug.PushViewport(scissorWidth * .25, scissorHeight * .25, scissorWidth - scissorWidth * .25);
-    // pipelines.debug.PushShader(device, VK_SHADER_STAGE_VERTEX_BIT, "shaders/baseVert.spv");
-    // pipelines.debug.PushShader(device, VK_SHADER_STAGE_FRAGMENT_BIT, "shaders/debugFrag.spv");
-
-    // pipelines.debug.PushVertexInputBindingDescription(sizeof(Vertex));
-    // pipelines.debug.PushPushConstant(sizeof(glm::mat4), VK_SHADER_STAGE_VERTEX_BIT);
-    // pipelines.debug.PushVertexInputAttributeDescription(0, 0, VK_FORMAT_R32G32B32_SFLOAT);
-    // pipelines.debug.PushVertexInputAttributeDescription(1, offsetof(Vertex, Vertex::mUv), VK_FORMAT_R32G32_SFLOAT);
-
-    // pipelines.debug.CreateCache(device, cacheData);
-    // pipelines.debug.CreateLayout(device, { mSetLayout });
-    // pipelines.debug.CreatePipeline(device, renderpass);
-
-    vkf::tool::GetFileContent("OffscreenPipelineCache", cacheData);
+    vkf::CreatePipelineCache(device, "GraphicsPipelineCache", mPipelineCache);
     // pipelines.offscreen.PushScissor(offscreenPass.width, offscreenPass.height);
     // pipelines.offscreen.PushViewport(offscreenPass.width, offscreenPass.height);
     pipelines.offscreen.PushShader(device, VK_SHADER_STAGE_VERTEX_BIT, "shaders/baseVert.spv");
@@ -331,11 +308,26 @@ void VulkanSplit::CreateGraphicsPipeline(VkDevice device, VkRenderPass renderpas
     pipelines.offscreen.PushVertexInputAttributeDescription(0, 0, VK_FORMAT_R32G32B32_SFLOAT);
     pipelines.offscreen.PushVertexInputAttributeDescription(1, offsetof(Vertex, Vertex::mUv), VK_FORMAT_R32G32_SFLOAT);
 
-    pipelines.offscreen.CreateCache(device, cacheData);
     pipelines.offscreen.CreateLayout(device, { mSetLayout });
-    pipelines.offscreen.CreatePipeline(device, offscreenPass.renderPass);
+    pipelines.offscreen.CreatePipeline(device, offscreenPass.renderPass, mPipelineCache);
+#ifdef OFFSCREEN_DEBUG
+    VkRect2D rect = {};
+    rect.extent.width = scissorWidth * .25;
+    rect.extent.height = scissorHeight * .25;
+    rect.offset.x = scissorWidth - scissorWidth * .25;
+    pipelines.debug.PushScissor(&rect);
+    pipelines.debug.PushViewport(scissorWidth * .25, scissorHeight * .25, scissorWidth - scissorWidth * .25);
+    pipelines.debug.PushShader(device, VK_SHADER_STAGE_VERTEX_BIT, "shaders/baseVert.spv");
+    pipelines.debug.PushShader(device, VK_SHADER_STAGE_FRAGMENT_BIT, "shaders/debugFrag.spv");
 
-    vkf::tool::GetFileContent("OffscreenColorPipelineCache", cacheData);
+    pipelines.debug.PushVertexInputBindingDescription(sizeof(Vertex));
+    pipelines.debug.PushPushConstant(sizeof(glm::mat4), VK_SHADER_STAGE_VERTEX_BIT);
+    pipelines.debug.PushVertexInputAttributeDescription(0, 0, VK_FORMAT_R32G32B32_SFLOAT);
+    pipelines.debug.PushVertexInputAttributeDescription(1, offsetof(Vertex, Vertex::mUv), VK_FORMAT_R32G32_SFLOAT);
+
+    pipelines.debug.CreateLayout(device, { mSetLayout });
+    pipelines.debug.CreatePipeline(device, renderpass, mPipelineCache);
+#endif
     // pipelines.offscreenColor.PushScissor(offscreenPass.width, offscreenPass.height);
     // pipelines.offscreenColor.PushViewport(offscreenPass.width, offscreenPass.height);
     pipelines.offscreenBackground.PushShader(device, VK_SHADER_STAGE_VERTEX_BIT, "shaders/baseColorVert.spv");
@@ -346,11 +338,9 @@ void VulkanSplit::CreateGraphicsPipeline(VkDevice device, VkRenderPass renderpas
     pipelines.offscreenBackground.PushVertexInputAttributeDescription(0, 0, VK_FORMAT_R32G32B32_SFLOAT);
     pipelines.offscreenBackground.PushVertexInputAttributeDescription(1, offsetof(Vertex, Vertex::mUv), VK_FORMAT_R32G32_SFLOAT);
 
-    pipelines.offscreenBackground.CreateCache(device, cacheData);
     pipelines.offscreenBackground.CreateLayout(device, { mSetLayout });
-    pipelines.offscreenBackground.CreatePipeline(device, offscreenPass.renderPass);
+    pipelines.offscreenBackground.CreatePipeline(device, offscreenPass.renderPass, mPipelineCache);
     //---------------------------------
-    vkf::tool::GetFileContent("GraphicsPipelineCache", cacheData);
     pipelines.pipeline.PushShader(device, VK_SHADER_STAGE_VERTEX_BIT, "shaders/baseVert.spv");
     pipelines.pipeline.PushShader(device, VK_SHADER_STAGE_FRAGMENT_BIT, "shaders/baseFrag.spv");
 
@@ -362,11 +352,8 @@ void VulkanSplit::CreateGraphicsPipeline(VkDevice device, VkRenderPass renderpas
     pipelines.pipeline.PushVertexInputAttributeDescription(0, 0, VK_FORMAT_R32G32B32_SFLOAT);
     pipelines.pipeline.PushVertexInputAttributeDescription(1, offsetof(Vertex, Vertex::mUv), VK_FORMAT_R32G32_SFLOAT);
 
-    pipelines.pipeline.CreateCache(device, cacheData);
-    pipelines.pipeline.CreateLayout(device, {mSetLayout});
-    pipelines.pipeline.CreatePipeline(device, renderpass);
-
-    vkf::tool::GetFileContent("BackgroundPipelineCache", cacheData);
+    pipelines.pipeline.CreateLayout(device, { mSetLayout });
+    pipelines.pipeline.CreatePipeline(device, renderpass, mPipelineCache);
 
     pipelines.background.PushShader(device, VK_SHADER_STAGE_VERTEX_BIT, "shaders/baseColorVert.spv");
     pipelines.background.PushShader(device, VK_SHADER_STAGE_FRAGMENT_BIT, "shaders/baseColorFrag.spv");
@@ -379,34 +366,27 @@ void VulkanSplit::CreateGraphicsPipeline(VkDevice device, VkRenderPass renderpas
     pipelines.background.PushVertexInputAttributeDescription(0, 0, VK_FORMAT_R32G32B32_SFLOAT);
     pipelines.background.PushVertexInputAttributeDescription(1, offsetof(Vertex, Vertex::mUv), VK_FORMAT_R32G32_SFLOAT);
 
-    pipelines.background.CreateCache(device, cacheData);
-    pipelines.background.CreateLayout(device, {mSetLayout});
-    pipelines.background.CreatePipeline(device, renderpass);
+    pipelines.background.CreateLayout(device, { mSetLayout });
+    pipelines.background.CreatePipeline(device, renderpass, mPipelineCache);
 }
-void VulkanSplit::UpdateOffscreenBackground(VkDevice device, const glm::vec3&size){
-    const glm::mat4 model = glm::scale(glm::mat4(1), size);
+void VulkanSplit::UpdateOffscreenBackground(VkDevice device, const VkExtent2D&size){
+    const glm::mat4 model = glm::scale(glm::mat4(1), glm::vec3(size.width, size.height, 1));
     uniform.offscreenBackground.UpdateData(device, &model);
 }
-void VulkanSplit::UpdateBackground(VkDevice device, const glm::vec3&pos, const glm::vec3&size){
-    const glm::mat4 model = glm::scale(glm::translate(glm::mat4(1), pos), size);
+void VulkanSplit::UpdateBackground(VkDevice device, const glm::vec2&pos, const VkExtent2D&size){
+    const glm::mat4 model = glm::scale(glm::translate(glm::mat4(1), glm::vec3(pos, 0)), glm::vec3(size.width, size.height, 1));
     uniform.background.UpdateData(device, &model);
 }
-void VulkanSplit::UpdateOffscreen(VkDevice device, uint32_t index, const glm::vec3&pos, const glm::vec2&size){
-    // const uint32_t index = ROW_COLUMN_INDEX(row, column, column);
+void VulkanSplit::UpdateOffscreen(VkDevice device, uint32_t index, const glm::vec2&pos, const VkExtent2D&grid){
     Uniform ubo;
-    const glm::mat4 modelScale = glm::scale(glm::mat4(1), glm::vec3(size, 1));
-    // const glm::mat4 modelScale = glm::scale(glm::mat4(1), glm::vec3(mImageSize.width, mImageSize.height, 1));
     ubo.imageIndex = index;
-    ubo.model = glm::translate(glm::mat4(1.0f), pos) * modelScale;
+    ubo.model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(pos, 0)), glm::vec3(grid.width, grid.height, 1));
     uniform.offscreenPosition.UpdateData(device, mMinUniformBufferOffset, &ubo, mMinUniformBufferOffset * index);
 }
-void VulkanSplit::UpdateTexture(VkDevice device, uint32_t index, const glm::vec3&pos, const glm::vec2&size){
-    // const uint32_t index = ROW_COLUMN_INDEX(row, column, column);
+void VulkanSplit::UpdateTexture(VkDevice device, uint32_t index, const glm::vec2&pos, const VkExtent2D&grid){
     Uniform ubo;
-    const glm::mat4 modelScale = glm::scale(glm::mat4(1), glm::vec3(size, 1));
-    // const glm::mat4 modelScale = glm::scale(glm::mat4(1), glm::vec3(mImageSize.width, mImageSize.height, 1));
     ubo.imageIndex = index;
-    ubo.model = glm::translate(glm::mat4(1.0f), pos) * modelScale;
+    ubo.model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(pos, 0)), glm::vec3(grid.width, grid.height, 1));
     uniform.position.UpdateData(device, mMinUniformBufferOffset, &ubo, mMinUniformBufferOffset * index);
 }
 void VulkanSplit::UpdateDescriptorSet(VkDevice device){
@@ -430,8 +410,9 @@ void VulkanSplit::UpdateDescriptorSet(VkDevice device){
     setlayoutBindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     setlayoutBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     vkf::tool::UpdateDescriptorSets(device, 1, setlayoutBindings, { uniform.offscreenBackground }, {}, descriptorset.offscreenBackground);
-    
-    // vkf::tool::UpdateDescriptorSets(device, 2, setlayoutBindings, { uniform.debug }, { offscreenPass.color }, descriptorset.debug, mTextureSampler);
+#ifdef OFFSCREEN_DEBUG
+    vkf::tool::UpdateDescriptorSets(device, 2, setlayoutBindings, { uniform.debug }, { offscreenPass.color }, descriptorset.debug, mTextureSampler);
+#endif
     if(mTexture.image != VK_NULL_HANDLE){
         vkf::tool::UpdateDescriptorSets(device, 2, setlayoutBindings, { uniform.offscreenPosition }, { mTexture }, descriptorset.offscreenPosition, mTextureSampler);
     }
@@ -446,12 +427,12 @@ void VulkanSplit::ChangeTextureImage(VkDevice device, const void **datas, uint32
 }
 
 void VulkanSplit::DrawFrame(VkDevice device, uint32_t currentFrame, const VkCommandBuffer &commandbuffers, VkSwapchainKHR swapchain, const VulkanQueue &vulkanQueue, const VulkanSynchronize &vulkanSynchronize, void (*recreateSwapchain)(void *userData), void *userData){
-    vkWaitForFences(device, 1, &vulkanSynchronize.fences, VK_TRUE, UINT16_MAX);
-    vkResetFences(device, 1, &vulkanSynchronize.fences);
+    vkWaitForFences(device, 1, &vulkanSynchronize.fences[currentFrame], VK_TRUE, UINT16_MAX);
+    vkResetFences(device, 1, &vulkanSynchronize.fences[currentFrame]);
     uint32_t imageIndex = 0;
-    vkf::PrepareFrame(device, swapchain, vulkanSynchronize.imageAcquired[currentFrame], imageIndex);
+    VK_CHECK(vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, vulkanSynchronize.imageAcquired[currentFrame], VK_NULL_HANDLE, &imageIndex));
     vkf::RenderFrame(device, offscreenPass.command, vulkanQueue.graphics, vulkanSynchronize.imageAcquired[currentFrame], offscreenPass.semaphore, VK_NULL_HANDLE);
-    vkf::RenderFrame(device, commandbuffers, vulkanQueue.graphics, offscreenPass.semaphore, vulkanSynchronize.renderComplete[currentFrame], vulkanSynchronize.fences);
+    vkf::RenderFrame(device, commandbuffers, vulkanQueue.graphics, offscreenPass.semaphore, vulkanSynchronize.renderComplete[currentFrame], vulkanSynchronize.fences[currentFrame]);
     vkf::SubmitFrame(device, imageIndex, swapchain, vulkanQueue.present, vulkanSynchronize.renderComplete[currentFrame], nullptr, nullptr);
      //VK_CHECK(vkQueueWaitIdle(vulkanQueue.graphics));
 }

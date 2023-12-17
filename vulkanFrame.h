@@ -2,6 +2,7 @@
 #define VULKAN_FRAME_H
 #include <string>
 #include <vector>
+#include <assert.h>
 #include <vulkan/vulkan.h>
 #define SWAPCHAIN_FORMAT VK_FORMAT_B8G8R8A8_UNORM
 #define VK_CHECK(x)                                                 \
@@ -39,9 +40,9 @@ struct VulkanImage{
 };
 
 struct VulkanBuffer{
-    VkBuffer buffer;
     VkDeviceSize size;
-    VkDeviceMemory memory;
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
     VkResult CreateBuffer(VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage);
     void AllocateAndBindMemory(VkDevice device, VkMemoryPropertyFlags properties);
     void UpdateData(VkDevice device, const void * pData, VkDeviceSize offset = 0);
@@ -60,7 +61,7 @@ struct VulkanWindows{
     VkRenderPass renderpass;
     VkSwapchainKHR swapchain;
     VkExtent2D swapchainExtent;
-	std::vector<VkImage>swapchainImages;
+    // std::vector<VkImage>swapchainImages;
     std::vector<VkFramebuffer>framebuffers;
     std::vector<VkImageView>swapchainImageViews;
 };
@@ -73,10 +74,9 @@ struct VulkanQueue{
     VkQueue graphics;
 };
 struct VulkanSynchronize{
-    VkFence fences;
-    // std::vector<VkFence>fences;
-     std::vector<VkSemaphore>imageAcquired;
-     std::vector<VkSemaphore>renderComplete;
+    std::vector<VkFence>fences;
+    std::vector<VkSemaphore>imageAcquired;
+    std::vector<VkSemaphore>renderComplete;
 };
 namespace vkf{
     static VkPhysicalDeviceMemoryProperties gMemoryProperties;
@@ -98,21 +98,26 @@ namespace vkf{
     VkResult CreateDescriptorPool(VkDevice device, uint32_t descriptorCount, VkDescriptorPool&pool);
 
     void CreateDepthImage(VkDevice device, const VkExtent2D&swapchainExtent, VulkanImage&image);
+    //文件名设置为""则不把管线缓存写到文件
+    void DestroyPipelineCache(VkDevice device, const std::string&cacheFile, VkPipelineCache&cache);
+    VkResult CreatePipelineCache(VkDevice device, const std::string&cacheFile, VkPipelineCache&cache);
 
     void CreateFontImage(VkDevice device, const void *datas, uint32_t width, uint32_t height, VulkanImage&image, VkCommandPool pool, VkQueue graphics);
     void CreateTextureImage(VkDevice device, const void *datas, uint32_t width, uint32_t height, VulkanImage&image, VkCommandPool pool, VkQueue graphics);
     void CreateFontImage(VkDevice device, const VulkanBuffer&dataBuffer, uint32_t width, uint32_t height, VulkanImage&image, VkCommandPool pool, VkQueue graphics);
     void CreateTextureImage(VkDevice device, const VulkanBuffer&dataBuffer, uint32_t width, uint32_t height, VulkanImage&image, VkCommandPool pool, VkQueue graphics);
+
+    void CreateCubeImage(VkDevice device, const void * const * datas, uint32_t width, uint32_t height, VulkanImage&image, VkCommandPool pool, VkQueue graphics);
+    void CreateCubeImage(VkDevice device, const VulkanBuffer&dataBuffer, uint32_t width, uint32_t height, VulkanImage&image, VkCommandPool pool, VkQueue graphics);
     
-    void CreateImageArray(VkDevice device, const void * const * datas, uint32_t imageCount, uint32_t width, uint32_t height, VulkanImage&image, VkCommandPool pool, VkQueue graphics);
-    void CreateImageArray(VkDevice device, const VulkanBuffer&dataBuffer, uint32_t imageCount, uint32_t width, uint32_t height, VulkanImage&image, VkCommandPool pool, VkQueue graphics);
+    void CreateImageArray(VkDevice device, const void * const * datas, uint32_t imageCount, uint32_t width, uint32_t height, VulkanImage&image, VkCommandPool pool, VkQueue graphics, VkImageViewType type = VK_IMAGE_VIEW_TYPE_2D_ARRAY);
+    void CreateImageArray(VkDevice device, const VulkanBuffer&dataBuffer, uint32_t imageCount, uint32_t width, uint32_t height, VulkanImage&image, VkCommandPool pool, VkQueue graphics, VkImageViewType type = VK_IMAGE_VIEW_TYPE_2D_ARRAY);
 
     VkResult CreateTextureSampler(VkDevice device, VkSampler&sampler);
     //一个set一个布局, setlayoutBindings可以用偏移
     VkResult CreateDescriptorSetLayout(VkDevice device, uint32_t setlayoutBindingCount, const VkDescriptorSetLayoutBinding *setlayoutBindings, VkDescriptorSetLayout *setlayout);
 
     VkResult RenderFrame(VkDevice device, const VkCommandBuffer&commandbuffers, VkQueue graphics, const VkSemaphore&imageAcquired, const VkSemaphore&renderComplete, const VkFence&fence = VK_NULL_HANDLE);
-    VkResult PrepareFrame(VkDevice device, VkSwapchainKHR swapchain, const VkSemaphore&imageAcquired, uint32_t &imageIndex);
     VkResult SubmitFrame(VkDevice device, uint32_t imageIndex, VkSwapchainKHR swapchain, const VkQueue present, const VkSemaphore&renderComplete, void(*recreateSwapchain)(void* userData) = nullptr, void* userData = nullptr);
     void DrawFrame(VkDevice device, uint32_t currentFrame, const VkCommandBuffer& commandbuffers, VkSwapchainKHR swapchain, const VulkanQueue&vulkanQueue, const VulkanSynchronize&vulkanSynchronize, void(*recreateSwapchain)(void* userData) = nullptr, void* userData = nullptr);
 
@@ -145,7 +150,7 @@ namespace vkf{
         void BeginRenderPassGeneral(VkCommandBuffer command, VkFramebuffer frame, VkRenderPass renderpass, uint32_t windowWidth, uint32_t windowHeight, bool enableDepth = false);
         void BeginRenderPass(VkCommandBuffer command, VkFramebuffer frame, VkRenderPass renderpass, uint32_t windowWidth, uint32_t windowHeight, uint32_t clearValueCount, VkClearValue *pClearValues, int32_t renderAreaWidthOffset = 0, int32_t renderAreaHeightOffset = 0);
     }
-}
+};
 // #include "vulkanDevice.h"
 // class vulkanFrame:vulkanDevice{
 //     VkQueue mGraphics, mPresent;

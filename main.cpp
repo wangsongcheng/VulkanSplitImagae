@@ -513,7 +513,7 @@ void updateImguiWidget(){
             if(ImGui::MenuItem("九宫格")){
                 if(g_Split.IsLoadTexture()){
                     g_WindowName = "九宫格";
-                    g_Split.SetSplitType(AAIGNED);
+                    g_Split.SetSplitType(JIU_GONG_GE);
                     rowAndcolumn[0] = 3;
                     rowAndcolumn[1] = 3;
                     g_Split.SetRow(rowAndcolumn[0]);
@@ -635,14 +635,11 @@ void setupVulkan(GLFWwindow *window){
 	printf("gpu name:%s, gpu type:%s\n", physicalDeviceProperties.deviceName, deviceType);
 }
 void cleanupVulkan(){
-     for (size_t i = 0; i < g_VulkanSynchronize.imageAcquired.size(); ++i){
-         //vkDestroyFence(g_VulkanDevice.device, g_VulkanSynchronize.fences[i], nullptr);
-         vkDestroySemaphore(g_VulkanDevice.device, g_VulkanSynchronize.imageAcquired[i], nullptr);
-         vkDestroySemaphore(g_VulkanDevice.device, g_VulkanSynchronize.renderComplete[i], nullptr);
-     }
-    vkDestroyFence(g_VulkanDevice.device, g_VulkanSynchronize.fences, nullptr);
-    //vkDestroySemaphore(g_VulkanDevice.device, g_VulkanSynchronize.imageAcquired[], nullptr);
-    //vkDestroySemaphore(g_VulkanDevice.device, g_VulkanSynchronize.renderComplete, nullptr);
+    for (size_t i = 0; i < g_VulkanSynchronize.imageAcquired.size(); ++i){
+        vkDestroyFence(g_VulkanDevice.device, g_VulkanSynchronize.fences[i], nullptr);
+        vkDestroySemaphore(g_VulkanDevice.device, g_VulkanSynchronize.imageAcquired[i], nullptr);
+        vkDestroySemaphore(g_VulkanDevice.device, g_VulkanSynchronize.renderComplete[i], nullptr);
+    }
     for (size_t i = 0; i < g_VulkanWindows.framebuffers.size(); ++i){
         vkDestroyImageView(g_VulkanDevice.device, g_VulkanWindows.swapchainImageViews[i], nullptr);
         vkDestroyFramebuffer(g_VulkanDevice.device, g_VulkanWindows.framebuffers[i], nullptr);
@@ -672,15 +669,17 @@ uint32_t g_SelectImageIndex;
 void mousecursorpos(GLFWwindow *window, double xpos, double ypos){
     if(g_ShowOpenFileUI || g_ShowOpenFolderUI)return;
     uint32_t index;
-    const glm::vec3 size = g_Split.GetImageSize() * glm::vec3(1.05, 1.05, 1);
+    VkExtent2D grid = g_Split.GetGridSize();
+    grid.width *= 1.05f;
+    grid.height *= 1.05f;
     if(g_LeftDown){
         if(g_SelectImageIndex != -1){
-            g_Split.UpdateTexture(g_VulkanDevice.device, g_SelectImageIndex, glm::vec3(xpos - size.x * .5, ypos - size.y * .5, 0), size);
+            g_Split.UpdateTexture(g_VulkanDevice.device, g_SelectImageIndex, glm::vec2(xpos - grid.width * .5, ypos - grid.height * .5), grid);
         }
     }
     else{
         if(g_Split.mousecursor(xpos, ypos, index)){
-            const glm::vec3 pos = g_Split.GetImagePos(index);
+            const glm::vec2 pos = g_Split.GetImagePos(index);
             if(g_SelectImageIndex != -1 && g_SelectImageIndex != index){
                 // g_Split.SwapImage(g_SelectImageIndex, index);
                 g_Split.SwapImage(g_VulkanDevice.device, g_VulkanQueue.graphics, g_VulkanPool.commandPool, g_SelectImageIndex, index);
@@ -692,7 +691,7 @@ void mousecursorpos(GLFWwindow *window, double xpos, double ypos){
             else{
                 g_SelectImageIndex = -1;
                 g_Split.UpdateUniform(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
-                g_Split.UpdateTexture(g_VulkanDevice.device, index, pos, size);
+                g_Split.UpdateTexture(g_VulkanDevice.device, index, pos, grid);
             }
         }
         else{
@@ -718,11 +717,13 @@ void RecordCommand(uint32_t currentFrame){
     g_Split.Draw(g_CommandBuffer, g_WindowWidth, g_WindowHeight);
     updateImguiWidget();
     vkCmdEndRenderPass(g_CommandBuffer);
-    // VkClearValue clearValues = {};
-    // clearValues.color = { 0, 0, 0, 1.0f };
-    // vkf::tool::BeginRenderPass(g_CommandBuffer, g_VulkanWindows.framebuffers[currentFrame], g_VulkanWindows.renderpass, g_WindowWidth * .25, g_WindowHeight * .25, 1, &clearValues, g_WindowWidth - g_WindowWidth * .25);
-    // g_Split.DrawDebug(g_CommandBuffer, g_WindowWidth, g_WindowHeight);
-    // vkCmdEndRenderPass(g_CommandBuffer);
+#ifdef OFFSCREEN_DEBUG
+    VkClearValue clearValues = {};
+    clearValues.color = { 0, 0, 0, 1.0f };
+    vkf::tool::BeginRenderPass(g_CommandBuffer, g_VulkanWindows.framebuffers[currentFrame], g_VulkanWindows.renderpass, g_WindowWidth * .25, g_WindowHeight * .25, 1, &clearValues, g_WindowWidth - g_WindowWidth * .25);
+    g_Split.DrawDebug(g_CommandBuffer, g_WindowWidth, g_WindowHeight);
+    vkCmdEndRenderPass(g_CommandBuffer);
+#endif
     VK_CHECK(vkEndCommandBuffer(g_CommandBuffer));
 }
 void setup(GLFWwindow *windows){

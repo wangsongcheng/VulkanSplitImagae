@@ -9,6 +9,7 @@
 //如果val比alignment小，则返回alignment，否则如果val大于alignment但小于alignment*2则返回alignment*2以此类推
 #define ALIGN(val, alignment)((val + alignment - 1) & ~(alignment - 1))
 #define ROW_COLUMN_INDEX(ROW_INDEX, COLUMN_INDEX, COLUMN)((ROW_INDEX) * (COLUMN) + (COLUMN_INDEX))
+// #define OFFSCREEN_DEBUG
 struct BaseGraphic{
     VulkanBuffer index;
     VulkanBuffer vertex;
@@ -34,14 +35,18 @@ struct Uniform{
 };
 class VulkanSplit{
     struct{
-        // GraphicsPipeline debug;
+#ifdef OFFSCREEN_DEBUG
+        GraphicsPipeline debug;
+#endif
         GraphicsPipeline pipeline;
         GraphicsPipeline offscreen;
         GraphicsPipeline background;
         GraphicsPipeline offscreenBackground;
     }pipelines;
     struct{
-        // VulkanBuffer debug;
+#ifdef OFFSCREEN_DEBUG
+        VulkanBuffer debug;
+#endif
         VulkanBuffer position;
         VulkanBuffer background;
         VulkanBuffer offscreenPosition;
@@ -49,7 +54,9 @@ class VulkanSplit{
     }uniform;
     struct{
         VkDescriptorSet set;
-        // VkDescriptorSet debug;
+#ifdef OFFSCREEN_DEBUG
+        VkDescriptorSet debug;
+#endif
         VkDescriptorSet background;
         VkDescriptorSet offscreenPosition;
         VkDescriptorSet offscreenBackground;
@@ -66,6 +73,7 @@ class VulkanSplit{
     VulkanImage mTexture;
     // VulkanImage mBackground;
     VkSampler mTextureSampler;
+    VkPipelineCache mPipelineCache;
     VkDescriptorSetLayout mSetLayout;
     void SetupDescriptorSetLayout(VkDevice device);
     VkResult PrepareOffscreenRenderpass(VkDevice device);
@@ -101,17 +109,17 @@ public:
     void DestroyGraphicsPipeline(VkDevice device);
     void CreateGraphicsPipeline(VkDevice device, VkRenderPass renderpass, uint32_t scissorWidth, uint32_t scissorHeight);
 
-    void UpdateOffscreenBackground(VkDevice device, const glm::vec3&size);
-    void UpdateBackground(VkDevice device, const glm::vec3&pos, const glm::vec3&size);
-    void UpdateOffscreen(VkDevice device, uint32_t index, const glm::vec3&pos, const glm::vec2&size);
-    void UpdateTexture(VkDevice device, uint32_t index, const glm::vec3&pos, const glm::vec2&size);
+    void UpdateOffscreenBackground(VkDevice device, const VkExtent2D&size);
+    void UpdateBackground(VkDevice device, const glm::vec2&pos, const VkExtent2D&size);
+    void UpdateOffscreen(VkDevice device, uint32_t index, const glm::vec2&pos, const VkExtent2D&grid);
+    void UpdateTexture(VkDevice device, uint32_t index, const glm::vec2&pos, const VkExtent2D&grid);
 
     void UpdateDescriptorSet(VkDevice device);
 
     void ChangeTextureImage(VkDevice device, const void **datas, uint32_t imageCount, uint32_t width, uint32_t height, VkQueue graphics, VkCommandPool pool);
-
+#ifdef OFFSCREEN_DEBUG
     void DrawDebug(VkCommandBuffer command, uint32_t windowWidth, uint32_t windowHeight);
-
+#endif
     void DrawFrame(VkDevice device, uint32_t currentFrame, const VkCommandBuffer& commandbuffers, VkSwapchainKHR swapchain, const VulkanQueue&vulkanQueue, const VulkanSynchronize&vulkanSynchronize, void(*recreateSwapchain)(void* userData) = nullptr, void* userData = nullptr);
 };
 #endif

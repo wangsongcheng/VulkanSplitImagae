@@ -36,6 +36,7 @@ VkResult VulkanImage::CreateImage(VkDevice device, const VkExtent3D&extent, VkIm
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.mipLevels = 1;
     imageInfo.extent = size;
+    if(arrayLayer == 6)imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
     imageInfo.usage = usage;
     imageInfo.format = format;
     imageInfo.tiling = tiling;
@@ -106,7 +107,7 @@ void VulkanBuffer::Destroy(VkDevice device){
 }
 VkPhysicalDevice vkf::GetPhysicalDevices(VkInstance instance, VkPhysicalDeviceType deviceType){
     uint32_t count;
-    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+    VkPhysicalDevice physicalDevice;
     VkPhysicalDeviceProperties physicalDeviceProperties;
 	vkEnumeratePhysicalDevices(instance, &count, nullptr);
     if(count == 0){
@@ -168,7 +169,8 @@ const char *vkf::tool::cvmx_chip_type_to_string(VkResult type){
 	}
 	return "VK_ERROR_UNKNOWN";
 }
-void vkf::tool::GetGraphicAndPresentQueueFamiliesIndex(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, int queueFamilies[2]){
+void vkf::tool::GetGraphicAndPresentQueueFamiliesIndex(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, int queueFamilies[2])
+{
     uint32_t queueFamilyCount = 0;
 	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
 
@@ -285,7 +287,6 @@ VkResult vkf::CreateSwapchain(VkPhysicalDevice physicalDevice, VkDevice device, 
     swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     swapchainInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     swapchainInfo.preTransform = surfaceCapabilities.currentTransform;
-    // swapchainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	return vkCreateSwapchainKHR(device, &swapchainInfo, nullptr, &swapchain);
 }
 void vkf::CreateSemaphoreAndFenceForSwapchain(VkDevice device, uint32_t swapchainImageCount, VulkanSynchronize&vulkanSynchronize){
@@ -297,17 +298,14 @@ void vkf::CreateSemaphoreAndFenceForSwapchain(VkDevice device, uint32_t swapchai
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     // uint32_t swapchainImageCount;
 	// vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, nullptr);
-    // vulkanSynchronize.fences.resize(swapchainImageCount);
-	 vulkanSynchronize.imageAcquired.resize(swapchainImageCount);
-	 vulkanSynchronize.renderComplete.resize(swapchainImageCount);
-	 for (size_t i = 0; i < swapchainImageCount; ++i) {
-     	//vkCreateFence(device, &fenceInfo, nullptr, &vulkanSynchronize.fences[i]);
-	 	vkCreateSemaphore(device, &semaphoreInfo, nullptr, &vulkanSynchronize.renderComplete[i]);
-	 	vkCreateSemaphore(device, &semaphoreInfo, nullptr, &vulkanSynchronize.imageAcquired[i]);
-	 }
-    vkCreateFence(device, &fenceInfo, nullptr, &vulkanSynchronize.fences);
-    //vkCreateSemaphore(device, &semaphoreInfo, nullptr, &vulkanSynchronize.renderComplete);
-    //vkCreateSemaphore(device, &semaphoreInfo, nullptr, &vulkanSynchronize.imageAcquired);
+    vulkanSynchronize.fences.resize(swapchainImageCount);
+	vulkanSynchronize.imageAcquired.resize(swapchainImageCount);
+	vulkanSynchronize.renderComplete.resize(swapchainImageCount);
+	for (size_t i = 0; i < swapchainImageCount; ++i) {
+    	vkCreateFence(device, &fenceInfo, nullptr, &vulkanSynchronize.fences[i]);
+		vkCreateSemaphore(device, &semaphoreInfo, nullptr, &vulkanSynchronize.renderComplete[i]);
+		vkCreateSemaphore(device, &semaphoreInfo, nullptr, &vulkanSynchronize.imageAcquired[i]);
+	}
 }
 VkResult vkf::CreateRenderPassForSwapchain(VkDevice device, VkRenderPass&renderPass, bool useDepthImage){
     VkSubpassDependency dependency = {};
@@ -367,10 +365,10 @@ VkResult vkf::CreateRenderPass(VkDevice device, const std::vector<VkSubpassDescr
 void vkf::CreateFrameBufferForSwapchain(VkDevice device, const VkExtent2D&swapchainExtent, VulkanWindows&vulkanWindows, bool createDepthImage){
     uint32_t count;
 	vkGetSwapchainImagesKHR(device, vulkanWindows.swapchain, &count, nullptr);
-    vulkanWindows.swapchainImages.resize(count);
-	vkGetSwapchainImagesKHR(device, vulkanWindows.swapchain, &count, vulkanWindows.swapchainImages.data());
-	vulkanWindows.swapchainImageViews.resize(vulkanWindows.swapchainImages.size());
-	vulkanWindows.framebuffers.resize(vulkanWindows.swapchainImages.size());
+	std::vector<VkImage>swapchainImages(count);
+	vkGetSwapchainImagesKHR(device, vulkanWindows.swapchain, &count, swapchainImages.data());
+	vulkanWindows.swapchainImageViews.resize(swapchainImages.size());
+	vulkanWindows.framebuffers.resize(swapchainImages.size());
 	std::vector<VkImageView>frameBufferAttachments(1);
 	if(createDepthImage){
         CreateDepthImage(device, swapchainExtent, vulkanWindows.depthImage);
@@ -383,7 +381,7 @@ void vkf::CreateFrameBufferForSwapchain(VkDevice device, const VkExtent2D&swapch
     VkImageViewCreateInfo imageViewInfo = {};
 	for (size_t i = 0; i < vulkanWindows.framebuffers.size(); ++i){
         imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        imageViewInfo.image = vulkanWindows.swapchainImages[i];
+        imageViewInfo.image = swapchainImages[i];
         imageViewInfo.subresourceRange.levelCount = 1;
         imageViewInfo.subresourceRange.layerCount = 1;
         imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
@@ -442,6 +440,7 @@ VkResult vkf::CreateDescriptorPool(VkDevice device, uint32_t descriptorCount, Vk
 	descriptorPoolInfo.pPoolSizes = descriptorPoolSize.data();
 	return vkCreateDescriptorPool(device, &descriptorPoolInfo, nullptr, &pool);
 }
+    
 VkResult vkf::RenderFrame(VkDevice device, const VkCommandBuffer&commandbuffers, VkQueue graphics, const VkSemaphore&imageAcquired, const VkSemaphore&renderComplete, const VkFence&fence){
 	// imagesInFlight[imageIndex] = inFlightFences[currentFrame];
 	VkSubmitInfo submitInfo = {};
@@ -456,19 +455,6 @@ VkResult vkf::RenderFrame(VkDevice device, const VkCommandBuffer&commandbuffers,
 	submitInfo.pWaitDstStageMask = waitStages;
 	return vkQueueSubmit(graphics, 1, &submitInfo, fence);
 }
-
-VkResult vkf::PrepareFrame(VkDevice device, VkSwapchainKHR swapchain, const VkSemaphore&imageAcquired, uint32_t&imageIndex){
-    //if (recreateSwapchain && result == VK_ERROR_OUT_OF_DATE_KHR) {
-    //    recreateSwapchain(userData);
-    //    return result;
-    //}
-    //else if(result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR){
-    //    printf("failed to acquire swap chain image!\n");
-    //    return result;
-    //}
-    return vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAcquired, VK_NULL_HANDLE, &imageIndex);
-}
-
 VkResult vkf::SubmitFrame(VkDevice device, uint32_t imageIndex, VkSwapchainKHR swapchain, const VkQueue present, const VkSemaphore&renderComplete, void(*recreateSwapchain)(void* userData), void* userData){
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -480,21 +466,14 @@ VkResult vkf::SubmitFrame(VkDevice device, uint32_t imageIndex, VkSwapchainKHR s
     return vkQueuePresentKHR(present, &presentInfo);
 }
 void vkf::DrawFrame(VkDevice device, uint32_t currentFrame, const VkCommandBuffer& commandbuffers, VkSwapchainKHR swapchain, const VulkanQueue&vulkanQueue, const VulkanSynchronize&vulkanSynchronize, void(*recreateSwapchain)(void* userData), void* userData){
-    // vkWaitForFences(device, 1, &vulkanSynchronize.fences[currentFrame], VK_TRUE, UINT16_MAX);
-    // vkResetFences(device, 1, &vulkanSynchronize.fences[currentFrame]);
-    // uint32_t imageIndex = PrepareFrame(device, swapchain, vulkanSynchronize.imageAcquired[currentFrame], recreateSwapchain, userData);
-    
-    // RenderFrame(device, commandbuffers, vulkanQueue.graphics, vulkanSynchronize.imageAcquired[currentFrame], vulkanSynchronize.renderComplete[currentFrame], vulkanSynchronize.fences[currentFrame]);
-    // VkResult result = SubmitFrame(device, imageIndex, swapchain, vulkanQueue.present, vulkanSynchronize.renderComplete[currentFrame], recreateSwapchain, userData);
-    vkWaitForFences(device, 1, &vulkanSynchronize.fences, VK_TRUE, UINT16_MAX);
-    vkResetFences(device, 1, &vulkanSynchronize.fences);
+    vkWaitForFences(device, 1, &vulkanSynchronize.fences[currentFrame], VK_TRUE, UINT16_MAX);
+    vkResetFences(device, 1, &vulkanSynchronize.fences[currentFrame]);
     uint32_t imageIndex = 0;
-    PrepareFrame(device, swapchain, vulkanSynchronize.imageAcquired[currentFrame], imageIndex);
-    
-    RenderFrame(device, commandbuffers, vulkanQueue.graphics, vulkanSynchronize.imageAcquired[currentFrame], vulkanSynchronize.renderComplete[currentFrame], vulkanSynchronize.fences);
+    VK_CHECK(vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, vulkanSynchronize.imageAcquired[currentFrame], VK_NULL_HANDLE, &imageIndex));
+    RenderFrame(device, commandbuffers, vulkanQueue.graphics, vulkanSynchronize.imageAcquired[currentFrame], vulkanSynchronize.renderComplete[currentFrame], vulkanSynchronize.fences[currentFrame]);
     VkResult result = SubmitFrame(device, imageIndex, swapchain, vulkanQueue.present, vulkanSynchronize.renderComplete[currentFrame], recreateSwapchain, userData);
 	if (recreateSwapchain && (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)) {
-		vkResetFences(device, 1, &vulkanSynchronize.fences);
+		vkResetFences(device, 1, &vulkanSynchronize.fences[currentFrame]);
 		recreateSwapchain(userData);
 	}
 	else if(VK_SUCCESS != result){
@@ -515,15 +494,37 @@ void vkf::CreateDepthImage(VkDevice device, const VkExtent2D&swapchainExtent, Vu
     image.AllocateAndBindMemory(device, VK_MEMORY_HEAP_DEVICE_LOCAL_BIT);
     image.CreateImageView(device, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT);
 }
-void vkf::CreateFontImage(VkDevice device, const void *datas, uint32_t width, uint32_t height, VulkanImage&image, VkCommandPool pool, VkQueue graphics){
-	VulkanBuffer tempStorageBuffer;
+VkResult vkf::CreatePipelineCache(VkDevice device, const std::string&cacheFile, VkPipelineCache &cache){
+    std::vector<uint32_t>cacheData;
+    if(vkf::tool::GetFileContent(cacheFile.c_str(), cacheData)){
+        VkPipelineCacheCreateInfo cacheInfo = {};
+        cacheInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+        cacheInfo.initialDataSize = cacheData.size() * sizeof(uint32_t);
+        cacheInfo.pInitialData = cacheData.data();
+        return vkCreatePipelineCache(device, &cacheInfo, nullptr, &cache);
+    }
+    return VK_ERROR_UNKNOWN;
+}
+void vkf::DestroyPipelineCache(VkDevice device, const std::string&cacheFile, VkPipelineCache &cache){
+    if(cacheFile != ""){
+        size_t cacheDataSize;
+        std::vector<uint32_t>cacheData;
+        vkGetPipelineCacheData(device, cache, &cacheDataSize, nullptr);
+        cacheData.resize(cacheDataSize / sizeof(char));
+        vkGetPipelineCacheData(device, cache, &cacheDataSize, cacheData.data());
+        vkf::tool::WriteFileContent(cacheFile, cacheData.data(), cacheData.size() * sizeof(uint32_t));
+    }
+    vkDestroyPipelineCache(device, cache, nullptr);
+}
+void vkf::CreateFontImage(VkDevice device, const void *datas, uint32_t width, uint32_t height, VulkanImage &image, VkCommandPool pool, VkQueue graphics){
+    VulkanBuffer tempStorageBuffer;
 	VkDeviceSize imageSize = width * height;
 	tempStorageBuffer.CreateBuffer(device, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
     tempStorageBuffer.AllocateAndBindMemory(device, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     tempStorageBuffer.UpdateData(device, imageSize, datas);
 	CreateFontImage(device, tempStorageBuffer, width, height, image, pool, graphics);
 	vkFreeMemory(device, tempStorageBuffer.memory, nullptr);
-	vkDestroyBuffer(device, tempStorageBuffer.buffer, nullptr);   
+	vkDestroyBuffer(device, tempStorageBuffer.buffer, nullptr);
 }
 void vkf::CreateTextureImage(VkDevice device, const void *datas, uint32_t width, uint32_t height, VulkanImage&image, VkCommandPool pool, VkQueue graphics){
 	VulkanBuffer tempStorageBuffer;
@@ -539,7 +540,7 @@ void vkf::CreateFontImage(VkDevice device, const VulkanBuffer&dataBuffer, uint32
     image.size.depth = 1;
     image.size.width = width;
     image.size.height = height;
-    image.CreateImage(device, VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT, VK_FORMAT_R8_UNORM);
+    image.CreateImage(device, VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT, VK_FORMAT_R8_UNORM);
     image.AllocateAndBindMemory(device, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VkCommandBuffer cmd;
 	tool::BeginSingleTimeCommands(device, pool, cmd);
@@ -560,7 +561,7 @@ void vkf::CreateTextureImage(VkDevice device, const VulkanBuffer&dataBuffer, uin
     image.size.depth = 1;
     image.size.width = width;
     image.size.height = height;
-    image.CreateImage(device, VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT, VK_FORMAT_R8G8B8A8_UNORM);
+    image.CreateImage(device, VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT, VK_FORMAT_R8G8B8A8_UNORM);
     image.AllocateAndBindMemory(device, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VkCommandBuffer cmd;
 	tool::BeginSingleTimeCommands(device, pool, cmd);
@@ -577,8 +578,14 @@ void vkf::CreateTextureImage(VkDevice device, const VulkanBuffer&dataBuffer, uin
 	tool::EndSingleTimeCommands(device, pool, graphics, cmd);
 	image.CreateImageView(device, VK_FORMAT_R8G8B8A8_UNORM);
 }
-void vkf::CreateImageArray(VkDevice device, const void * const * datas, uint32_t imageCount, uint32_t width, uint32_t height, VulkanImage&image, VkCommandPool pool, VkQueue graphics){
-	// size_t imageCount = datas.size();
+void vkf::CreateCubeImage(VkDevice device, const void *const *datas, uint32_t width, uint32_t height, VulkanImage &image, VkCommandPool pool, VkQueue graphics){
+    CreateImageArray(device, datas, 6, width, height, image, pool, graphics, VK_IMAGE_VIEW_TYPE_CUBE);
+}
+void vkf::CreateCubeImage(VkDevice device, const VulkanBuffer &dataBuffer, uint32_t width, uint32_t height, VulkanImage &image, VkCommandPool pool, VkQueue graphics){
+    CreateImageArray(device, dataBuffer, 6, width, height, image, pool, graphics, VK_IMAGE_VIEW_TYPE_CUBE);
+}
+void vkf::CreateImageArray(VkDevice device, const void *const *datas, uint32_t imageCount, uint32_t width, uint32_t height, VulkanImage &image, VkCommandPool pool, VkQueue graphics, VkImageViewType type){
+    // size_t imageCount = datas.size();
 	VulkanBuffer tempStorageBuffer;
 	VkDeviceSize imageSize = width * height * 4;
 	tempStorageBuffer.CreateBuffer(device, imageSize * imageCount, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
@@ -586,16 +593,16 @@ void vkf::CreateImageArray(VkDevice device, const void * const * datas, uint32_t
 	for(uint32_t i = 0; i < imageCount; ++i){
 		tempStorageBuffer.UpdateData(device, imageSize, datas[i], i * imageSize);
 	}
-	CreateImageArray(device, tempStorageBuffer, imageCount, width, height, image, pool, graphics);
+	CreateImageArray(device, tempStorageBuffer, imageCount, width, height, image, pool, graphics, type);
 	vkFreeMemory(device, tempStorageBuffer.memory, nullptr);
 	vkDestroyBuffer(device, tempStorageBuffer.buffer, nullptr);
 }
-void vkf::CreateImageArray(VkDevice device, const VulkanBuffer&dataBuffer, uint32_t imageCount, uint32_t width, uint32_t height, VulkanImage&image, VkCommandPool pool, VkQueue graphics){
+void vkf::CreateImageArray(VkDevice device, const VulkanBuffer&dataBuffer, uint32_t imageCount, uint32_t width, uint32_t height, VulkanImage&image, VkCommandPool pool, VkQueue graphics, VkImageViewType type){
 	const VkDeviceSize imageSize = width * height * 4;
     image.size.depth = 1;
     image.size.width = width;
     image.size.height = height;
-    image.CreateImage(device, VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT, VK_FORMAT_R8G8B8A8_UNORM, imageCount);
+    image.CreateImage(device, VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT, VK_FORMAT_R8G8B8A8_UNORM, imageCount);
     image.AllocateAndBindMemory(device, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VkCommandBuffer cmd;
 	tool::BeginSingleTimeCommands(device, pool, cmd);
@@ -614,7 +621,7 @@ void vkf::CreateImageArray(VkDevice device, const VulkanBuffer&dataBuffer, uint3
 	vkCmdCopyBufferToImage(cmd, dataBuffer.buffer, image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, bufferCopyRegions.size(), bufferCopyRegions.data());
 	tool::SetImageLayout(cmd, image.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, imageCount);
 	tool::EndSingleTimeCommands(device, pool, graphics, cmd);
-	image.CreateImageView(device, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_VIEW_TYPE_2D_ARRAY, imageCount);
+	image.CreateImageView(device, VK_FORMAT_R8G8B8A8_UNORM, type, imageCount);
 }
 VkResult vkf::CreateTextureSampler(VkDevice device, VkSampler&sampler){
     VkSamplerCreateInfo createInfo = {};
@@ -747,7 +754,8 @@ void vkf::tool::EndSingleTimeCommands(VkDevice device, VkCommandPool commandPool
 }
 void vkf::tool::BeginRenderPassGeneral(VkCommandBuffer command, VkFramebuffer frame, VkRenderPass renderpass, uint32_t windowWidth, uint32_t windowHeight, bool enableDepth){
     std::vector<VkClearValue> clearValues(2);
-    clearValues[0].color = { 0.1f , 0.1f , 0.1f , 1.0f };
+    clearValues[0].color = { 0 , 0 , 0 , 1 };
+    // clearValues[0].color = { 0.1f , 0.1f , 0.1f , 1.0f };
     if(enableDepth)clearValues[1].depthStencil = { 1.0f , 0 };
     BeginRenderPass(command, frame, renderpass, windowWidth, windowHeight, enableDepth?2:clearValues.size(), clearValues.data());
 }

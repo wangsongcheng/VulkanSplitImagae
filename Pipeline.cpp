@@ -149,13 +149,13 @@ void Pipeline::BindDescriptorSet(VkCommandBuffer cmd, VkDescriptorSet&set, uint3
 void Pipeline::BindDescriptorSet(VkCommandBuffer cmd, VkPipelineBindPoint pipelineBindPoint, VkDescriptorSet&set, uint32_t firstSet, uint32_t dynamicOffsetCount, const uint32_t *pDynamicOffsets, uint32_t descriptorSetCount)const{
     vkCmdBindDescriptorSets(cmd, pipelineBindPoint, mLayout, firstSet, descriptorSetCount, &set, dynamicOffsetCount, pDynamicOffsets);    
 }
-VkResult Pipeline::CreateCache(VkDevice device, const std::vector<uint32_t>&cacheData){
-    VkPipelineCacheCreateInfo cacheInfo = {};
-    cacheInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
-    cacheInfo.initialDataSize = cacheData.size() * sizeof(uint32_t);
-    cacheInfo.pInitialData = cacheData.data();
-    return vkCreatePipelineCache(device, &cacheInfo, nullptr, &mCache);
-}
+// VkResult Pipeline::CreateCache(VkDevice device, const std::vector<uint32_t>&cacheData){
+//     VkPipelineCacheCreateInfo cacheInfo = {};
+//     cacheInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+//     cacheInfo.initialDataSize = cacheData.size() * sizeof(uint32_t);
+//     cacheInfo.pInitialData = cacheData.data();
+//     return vkCreatePipelineCache(device, &cacheInfo, nullptr, &mCache);
+// }
 // VkResult Pipeline::CreateDescriptorSetLayout(VkDevice device){
 //     if(mSetLayoutBindings.empty()){
 //         printf("请先调用PushDescriptorSetLayoutBinding函数\n");
@@ -200,10 +200,10 @@ VkResult Pipeline::CreateLayout(VkDevice device, const std::vector<VkDescriptorS
 //    //     DestroyDescriptorSet(device, it->mDescriptorSet[uiDescriptorSet]);
 //    // }
 //}
-void Pipeline::DestroyCache(VkDevice device, std::vector<uint32_t>&cacheData){
-    GetCacheData(device, cacheData);
-    vkDestroyPipelineCache(device, mCache, nullptr);
-}
+// void Pipeline::DestroyCache(VkDevice device, std::vector<uint32_t>&cacheData){
+//     GetCacheData(device, cacheData);
+//     vkDestroyPipelineCache(device, mCache, nullptr);
+// }
 void Pipeline::DestroyLayout(VkDevice device){
     vkDestroyPipelineLayout(device, mLayout, nullptr);
 }
@@ -222,12 +222,12 @@ void Pipeline::DestroyPipeline(VkDevice device){
 //        vkDestroyShaderModule(device, it->mModule, nullptr);
 //    }
 // }
-void Pipeline::GetCacheData(VkDevice device, std::vector<uint32_t>&cacheData){
-    size_t cacheDataSize;
-    vkGetPipelineCacheData(device, mCache, &cacheDataSize, nullptr);
-    cacheData.resize(cacheDataSize / sizeof(char));
-    vkGetPipelineCacheData(device, mCache, &cacheDataSize, cacheData.data());
-}
+// void Pipeline::GetCacheData(VkDevice device, std::vector<uint32_t>&cacheData){
+//     size_t cacheDataSize;
+//     vkGetPipelineCacheData(device, mCache, &cacheDataSize, nullptr);
+//     cacheData.resize(cacheDataSize / sizeof(char));
+//     vkGetPipelineCacheData(device, mCache, &cacheDataSize, cacheData.data());
+// }
 void Pipeline::PushPushConstant(const VkPushConstantRange&pc) {
     mPushConstants.push_back(pc);
 }
@@ -339,7 +339,7 @@ GraphicsPipeline::~GraphicsPipeline(){
 
 //     // }
 // }
-VkResult GraphicsPipeline::CreatePipeline(VkDevice device, VkRenderPass&renderPass){
+VkResult GraphicsPipeline::CreatePipeline(VkDevice device, VkRenderPass renderPass, VkPipelineCache cache){
     uint32_t specializationIndex = 0;
     VkSpecializationInfo specialization = {};
     std::vector<VkPipelineShaderStageCreateInfo>ShaderStageCreateInfo(mShaders.size());
@@ -349,7 +349,7 @@ VkResult GraphicsPipeline::CreatePipeline(VkDevice device, VkRenderPass&renderPa
         ShaderStageCreateInfo[i].pName = mShaders[i].mEntryName.c_str();
         ShaderStageCreateInfo[i].stage = (VkShaderStageFlagBits)mShaders[i].mStage;
         ShaderStageCreateInfo[i].module = mShaders[i].mModule;
-        if(!mSpecializationInfo.empty()){
+        if(specializationIndex < mSpecializationInfo.size()){
             if(ShaderStageCreateInfo[i].stage & mSpecializationInfo[specializationIndex].stage){
                 specialization.pData = mSpecializationInfo[specializationIndex].pData;
                 specialization.dataSize = mSpecializationInfo[specializationIndex].specializationMapEntrys[0].size;//这里默认所有大小都相同
@@ -375,7 +375,7 @@ VkResult GraphicsPipeline::CreatePipeline(VkDevice device, VkRenderPass&renderPa
     // multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
     VkPipelineColorBlendStateCreateInfo ColorBlendStateCreateInfo{};
     ColorBlendStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    ColorBlendStateCreateInfo.attachmentCount = mState.ColorBlendStateAttachmentCount;
+    ColorBlendStateCreateInfo.attachmentCount = 1;
     ColorBlendStateCreateInfo.pAttachments = &mState.mColorBlend;
     //if(blendConstants)memcpy(info.blendConstants, blendConstants, sizeof(float) * 4);
     ColorBlendStateCreateInfo.logicOp = VK_LOGIC_OP_COPY;
@@ -433,7 +433,7 @@ VkResult GraphicsPipeline::CreatePipeline(VkDevice device, VkRenderPass&renderPa
     info.pDepthStencilState = &mState.mDepthStencil;
     info.pMultisampleState = &mState.mMultisample;
     info.pRasterizationState = &mState.mRasterization;
-    VkResult ret = vkCreateGraphicsPipelines(device, mCache, 1, &info, nullptr, &mPipeline);
+    VkResult ret = vkCreateGraphicsPipelines(device, cache, 1, &info, nullptr, &mPipeline);
     if(pDynamicState)delete pDynamicState;
     for (auto it = ShaderBegin(); it != ShaderEnd(); ++it) {
         vkDestroyShaderModule(device, it->mModule, nullptr);

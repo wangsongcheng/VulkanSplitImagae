@@ -3,29 +3,39 @@
 #include "VulkanSplit.h"
 enum SPLIT_TYPE{
     JIGSAW = 0,
-    AAIGNED
+    JIU_GONG_GE
 };
 class SplitImage:public VulkanSplit{
     struct{
         glm::vec3 pos;
-        glm::vec3 size;
+        VkExtent2D size;
         glm::vec3 color = glm::vec3(1, 1, 1);
     }background;
     struct{
         VkExtent2D size;
         std::string type;
-        VkExtent2D realSize;
         std::vector<unsigned char *>datas;
     }images;
+    VkExtent2D mGrid;
     uint32_t mRow, mColumn;
-    SPLIT_TYPE mSplitType = AAIGNED;
-    std::vector<glm::vec3>mImagePos;
-    std::vector<glm::vec3>mRealImagePos;
+    SPLIT_TYPE mSplitType = JIU_GONG_GE;
+    std::vector<glm::vec2>mImagePos;
+    std::vector<glm::vec2>mRealImagePos;
     void UpdateImage(VkDevice device);
     void InitImagePos(uint32_t windowWidth, uint32_t windowHeight);
+    void InitBackgroundPos(uint32_t windowWidth, uint32_t windowHeight);
+    void InitJigsawPos(const glm::vec3&backgroundPos, const VkExtent2D&backgroundSize);
+    void InitJiuGongGePos(const glm::vec3&backgroundPos, const VkExtent2D&backgroundSize);
 public:
     SplitImage(/* args */);
     ~SplitImage();
+    inline VkExtent2D GetBackgroundSize(const VkExtent2D&imageSize){
+        VkExtent2D size;
+        const uint32_t offset = 10;
+        size.height = (mRow + 1) * offset + imageSize.height;
+        size.width = (mColumn + 1) * offset + imageSize.width;
+        return size;
+    }
     inline void SetRow(uint32_t row){
         mRow = row;
     }
@@ -35,18 +45,14 @@ public:
     inline void ChangeBackgroundColor(const glm::vec3&color){
         background.color = color;
     }
-    inline glm::vec3 GetImagePos(uint32_t index){
+    inline glm::vec2 GetImagePos(uint32_t index){
         return mImagePos[index];
     }
     inline void SetSplitType(SPLIT_TYPE type){
         mSplitType = type;
     }
-    inline glm::vec3 GetImageSize(){
-        glm::vec3 size;
-        size.z = 1;
-        size.x = images.size.width;
-        size.y = images.size.height;
-        return size;
+    inline VkExtent2D GetGridSize(){
+        return mGrid;
     }
     inline bool IsLoadTexture(){
         return !images.datas.empty();
