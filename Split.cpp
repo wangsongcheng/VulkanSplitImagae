@@ -108,12 +108,6 @@ void SplitImage::WriteImageToFile(VkPhysicalDevice physicalDevice, VkDevice devi
     bool supportsBlit = true;
     // Check blit support for source and destination
     VkFormatProperties formatProps;
-    // Check if the device supports blitting from optimal images (the swapchain images are in optimal format)
-    vkGetPhysicalDeviceFormatProperties(physicalDevice, SWAPCHAIN_FORMAT, &formatProps);
-    if (!(formatProps.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT)) {
-        printf("Device does not support blitting from optimal tiled images, using copy instead of blit!\n");
-        supportsBlit = false;
-    }
     // Check if the device supports blitting to linear images
     vkGetPhysicalDeviceFormatProperties(physicalDevice, COLOR_FORMAT, &formatProps);
     if (!(formatProps.linearTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT)) {
@@ -231,22 +225,25 @@ void SplitImage::WriteImageToFile(VkPhysicalDevice physicalDevice, VkDevice devi
     data += subResourceLayout.offset;
 
     const uint32_t imageSize = realImageSize.width * realImageSize.height * 4;
-    glm::float32 *imageDatas = new glm::float32[imageSize];
-    // stbi_uc *imageDatas = new stbi_uc[imageSize];
-    // ppm binary pixel data
+    // glm::float32 *imageDatas = new glm::float32[imageSize];
+    stbi_uc *imageDatas = new stbi_uc[imageSize];
+    uint32_t index = 0;
     for (uint32_t y = 0; y < realImageSize.height; y++){
-        glm::float32 *row = (glm::float32 *)data;
+        glm::float32 *pixel = (glm::float32 *)data;
         for (uint32_t x = 0; x < realImageSize.width; x++){
-            const uint32_t index = ROW_COLUMN_INDEX(y, x, realImageSize.width);
+            // const uint32_t index = ROW_COLUMN_INDEX(y, x, realImageSize.width);
             // printf("%.0f%.0f%.0f%.0f ", *row, *(row + 1), *(row + 2), *(row + 3));
-            // imageDatas[index] = *row;
-            // imageDatas[index + 1] = *(row + 1);
-            // imageDatas[index + 2] = *(row + 2);
-            // imageDatas[index + 3] = *(row + 3);
-            memcpy(imageDatas + index, row, sizeof(glm::float32) * 4);
-            row += sizeof(glm::float32);
+            imageDatas[index] = (*pixel) * 255;
+            imageDatas[index + 1] = (*(pixel + 1)) * 255;
+            imageDatas[index + 2] = (*(pixel + 2)) * 255;
+            imageDatas[index + 3] = (*(pixel + 3)) * 255;
+            // printf("%d%d%d%d ", imageDatas[index], imageDatas[index + 1], imageDatas[index + 2], imageDatas[index + 3]);
+            // imageDatas[index] = data[index];
+            // memcpy(imageDatas + index, row, sizeof(glm::float32) * 4);
+            index += 4;
+            pixel += sizeof(glm::float32);
         }
-        // printf("\n");
+        printf("\n");
         data += subResourceLayout.rowPitch;
     }
     // Clean up resources
@@ -352,6 +349,15 @@ bool SplitImage::mousecursor(double xpos, double ypos, uint32_t &index){
     }
     return false;
 }
+// void PrintPixel(const stbi_uc *data, uint32_t width, uint32_t height){
+//     for (uint32_t uiRow = 0; uiRow < height; ++uiRow){
+//         for (uint32_t uiColumn = 0; uiColumn < width; ++uiColumn){
+//             const uint32_t index = ROW_COLUMN_INDEX(uiRow, uiColumn, 3);
+//             printf("%d%d%d%d ", data[index], data[index + 1], data[index + 2], data[index + 3]);
+//         }
+//         printf("\n");
+//     }
+// }
 void SplitImage::ChangeTextureImage(VkDevice device, const std::string &image, uint32_t windowWidth, uint32_t windowHeight, VkQueue graphics, VkCommandPool pool){
     int nrComponents;
     VkExtent2D source, destination;
@@ -360,6 +366,7 @@ void SplitImage::ChangeTextureImage(VkDevice device, const std::string &image, u
         printf("load picture error:%s\n", image.c_str());
         return;
     }
+    // PrintPixel(data, source.width, source.height);
     destination.height = source.height / mRow;
     destination.width = source.width / mColumn;
     for (size_t i = 0; i < images.datas.size(); ++i){

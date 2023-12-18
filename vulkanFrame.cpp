@@ -754,8 +754,7 @@ void vkf::tool::EndSingleTimeCommands(VkDevice device, VkCommandPool commandPool
 }
 void vkf::tool::BeginRenderPassGeneral(VkCommandBuffer command, VkFramebuffer frame, VkRenderPass renderpass, uint32_t windowWidth, uint32_t windowHeight, bool enableDepth){
     std::vector<VkClearValue> clearValues(2);
-    clearValues[0].color = { 0 , 0 , 0 , 1 };
-    // clearValues[0].color = { 0.1f , 0.1f , 0.1f , 1.0f };
+    clearValues[0].color = { 0.1f , 0.1f , 0.1f , 1.0f };
     if(enableDepth)clearValues[1].depthStencil = { 1.0f , 0 };
     BeginRenderPass(command, frame, renderpass, windowWidth, windowHeight, enableDepth?2:clearValues.size(), clearValues.data());
 }
