@@ -14,15 +14,11 @@ void copy(const stbi_uc *source, stbi_uc *destination, uint32_t row, uint32_t co
     }
 }
 void SplitImage::UpdateImage(VkDevice device){
-    VkExtent2D offscreenGridSize;
-    offscreenGridSize.height = images.size.height / mRow;
-    offscreenGridSize.width = images.size.width / mColumn;
     for (uint32_t uiRow = 0; uiRow < mRow; ++uiRow){
         for (uint32_t uiColumn = 0; uiColumn < mColumn; ++uiColumn){
             const uint32_t index = ROW_COLUMN_INDEX(uiRow, uiColumn, mColumn);
             if(mImagePos[index] != glm::vec2(0)){
-                UpdateTexture(device, index, mImagePos[index], mGrid);
-                UpdateOffscreen(device, index, mRealImagePos[index], offscreenGridSize);
+                UpdateTexture(device, index, mGrid);
             }
             // mImagePos[mImageIndex[index]] = glm::vec3(backgroundPos.x + uiColumn * splitImage.size.width + (uiColumn + 1) * offset, backgroundPos.y + uiRow * splitImage.size.height + (uiRow + 1) * offset, 0);
             // UpdateTexture(device, mImageIndex[index], mImagePos[mImageIndex[index]], glm::vec2(splitImage.size.width, splitImage.size.height));
@@ -43,20 +39,20 @@ void SplitImage::InitBackgroundPos(uint32_t windowWidth, uint32_t windowHeight){
     imageSize.height = mRow * mGrid.height;
     imageSize.width = mColumn * mGrid.width;
     background.size = GetBackgroundSize(imageSize);
-    background.pos = glm::vec3(windowWidth * .5 - background.size.width * .5, windowHeight * .5 - background.size.height * .5, 0);    
+    background.pos = glm::vec3(windowWidth * .5 - background.size.width * .5, windowHeight * .5 - background.size.height * .5, 0);
 }
 void SplitImage::InitJigsawPos(const glm::vec3&backgroundPos, const VkExtent2D&backgroundSize){
     const uint32_t offset = 10;
     VkExtent2D offscreenGridSize;
     mImagePos.resize(mRow * mColumn);
-    mRealImagePos.resize(mRow * mColumn);
+    mOffscreenImagePos.resize(mRow * mColumn);
     offscreenGridSize.height = images.size.height / mRow;
     offscreenGridSize.width = images.size.width / mColumn;
     mImagePos[0] = glm::vec3(background.pos.x + offset, background.pos.y + offset, 0);
     for (uint32_t uiRow = mRow - 2; uiRow < mRow; ++uiRow){
         for (uint32_t uiColumn = mColumn - 2; uiColumn < mColumn; ++uiColumn){
             const uint32_t index = ROW_COLUMN_INDEX(uiRow, uiColumn, mColumn);
-            mRealImagePos[index] = glm::vec2(uiColumn * offscreenGridSize.width + (uiColumn + 1) * offset, uiRow * offscreenGridSize.height + (uiRow + 1) * offset);
+            mOffscreenImagePos[index] = glm::vec2(uiColumn * offscreenGridSize.width + (uiColumn + 1) * offset, uiRow * offscreenGridSize.height + (uiRow + 1) * offset);
             mImagePos[index] = glm::vec2(background.pos.x + uiColumn * mGrid.width + (uiColumn + 1) * offset, background.pos.y + uiRow * mGrid.height + (uiRow + 1) * offset);
         }
     }
@@ -65,13 +61,13 @@ void SplitImage::InitJiuGongGePos(const glm::vec3&backgroundPos, const VkExtent2
     const uint32_t offset = 10;
     VkExtent2D offscreenGridSize;
     mImagePos.resize(mRow * mColumn);
-    mRealImagePos.resize(mRow * mColumn);
+    mOffscreenImagePos.resize(mRow * mColumn);
     offscreenGridSize.height = images.size.height / mRow;
     offscreenGridSize.width = images.size.width / mColumn;
     for (uint32_t uiRow = 0; uiRow < mRow; ++uiRow){
         for (uint32_t uiColumn = 0; uiColumn < mColumn; ++uiColumn){
             const uint32_t index = ROW_COLUMN_INDEX(uiRow, uiColumn, mColumn);
-            mRealImagePos[index] = glm::vec2(uiColumn * offscreenGridSize.width + (uiColumn + 1) * offset, uiRow * offscreenGridSize.height + (uiRow + 1) * offset);
+            mOffscreenImagePos[index] = glm::vec2(uiColumn * offscreenGridSize.width + (uiColumn + 1) * offset, uiRow * offscreenGridSize.height + (uiRow + 1) * offset);
             mImagePos[index] = glm::vec2(background.pos.x + uiColumn * mGrid.width + (uiColumn + 1) * offset, background.pos.y + uiRow * mGrid.height + (uiRow + 1) * offset);
         }
     }
@@ -243,7 +239,7 @@ void SplitImage::WriteImageToFile(VkPhysicalDevice physicalDevice, VkDevice devi
             index += 4;
             pixel += sizeof(glm::float32);
         }
-        printf("\n");
+        // printf("\n");
         data += subResourceLayout.rowPitch;
     }
     // Clean up resources
@@ -272,19 +268,19 @@ void SplitImage::Draw(VkCommandBuffer command, uint32_t windowWidth, uint32_t wi
     VulkanSplit::Draw(command, windowWidth, windowHeight, background.color);
 }
 
-void SplitImage::UpdateUniform(VkDevice device, uint32_t windowWidth, uint32_t windowHeight){
+void SplitImage::UpdateBackground(VkDevice device, uint32_t windowWidth, uint32_t windowHeight){
     const uint32_t offset = 10;
     if(IsLoadTexture()){
-        UpdateBackground(device, background.pos, background.size);
-        UpdateOffscreenBackground(device, GetBackgroundSize(images.size));
+        VulkanSplit::UpdateBackground(device, background.pos, background.size);
+        UpdateOffscreenBackground(device);
     }
-    else{
-        VkExtent2D imageSize;
-        imageSize.width = windowWidth * .8f;
-        imageSize.height = windowHeight * .8f;
-        UpdateBackground(device, glm::vec3(windowWidth - (windowWidth - 3 * offset), windowHeight - (windowHeight - 5 * offset), 0), GetBackgroundSize(imageSize));
-    }
-    if(!images.datas.empty())UpdateImage(device);
+    // else{
+    //     VkExtent2D imageSize, backgroundSize;
+    //     imageSize.width = windowWidth * .5f;
+    //     imageSize.height = windowHeight * .5f;
+    //     backgroundSize = GetBackgroundSize(imageSize);
+    //     VulkanSplit::UpdateBackground(device, glm::vec3(windowWidth - backgroundSize.width * .5, windowHeight - backgroundSize.height * .5, 0), backgroundSize);
+    // }
 }
 
 void SplitImage::Setup(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphics, const VulkanPool &pool){
@@ -296,6 +292,7 @@ void SplitImage::Setup(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue
         mRow = 3;
         mColumn = 3;
     }
+    // images.angle.resize(mColumn * mRow);
     // ChangeTextureImage(device, "1.jpg", graphics, pool.commandPool);
     VulkanSplit::Setup(physicalDevice, device, graphics, pool, mRow * mColumn);
 }
@@ -338,7 +335,7 @@ void SplitImage::Setup(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue
 //     ChangeTextureImage(device, (const void **)mImageDatas.data(), mImageDatas.size(), destination.width, destination.height, graphics, pool);
 // }
 
-bool SplitImage::mousecursor(double xpos, double ypos, uint32_t &index){
+bool SplitImage::mousecursor(double xpos, double ypos, int32_t &index){
     for (size_t i = 0; i < mImagePos.size(); ++i){
         // if(xpos > mImagePos[mImageIndex[i]].x && ypos > mImagePos[mImageIndex[i]].y && xpos < mImagePos[mImageIndex[i]].x + mImageSize.width && ypos < mImagePos[mImageIndex[i]].y + mImageSize.height){
         if(xpos > mImagePos[i].x && ypos > mImagePos[i].y && xpos < mImagePos[i].x + mGrid.width && ypos < mImagePos[i].y + mGrid.height){
@@ -425,17 +422,36 @@ void SplitImage::ChangeTextureImage(VkDevice device, const std::string &image, u
 //     // mImageIndex[sourceIndex] = mImageIndex[destIndex];
 //     // mImageIndex[destIndex] = index;
 // }
-void SplitImage::SwapImage(VkDevice device, VkQueue graphics, VkCommandPool pool, uint32_t sourceIndex, uint32_t destIndex){
+void SplitImage::SwapImage(VkDevice device, uint32_t sourceIndex, uint32_t destIndex, VkQueue graphics, VkCommandPool pool){
     VkExtent2D source, destination;
     destination.height = images.size.height / mRow;
     destination.width = images.size.width / mColumn;
-    const uint32_t imageSize = destination.width * destination.height * 4;
+    SwapImage(device, images.datas[sourceIndex], destination.width, destination.height, destIndex, graphics, pool);
+}
+
+void SplitImage::SwapImage(VkDevice device, void *datas, uint32_t width, uint32_t height, uint32_t destIndex, VkQueue graphics, VkCommandPool pool){
+    const uint32_t imageSize = width * height * 4;
     stbi_uc *data = new stbi_uc[imageSize];
-    memcpy(data, images.datas[sourceIndex], imageSize);
-    memcpy(images.datas[sourceIndex], images.datas[destIndex], imageSize);
-    memcpy(images.datas[destIndex], data, imageSize);
+    memcpy(data, images.datas[destIndex], imageSize);
+    memcpy(images.datas[destIndex], datas, imageSize);
+    memcpy(datas, data, imageSize);
     delete[]data;
     VkExtent2D imageExtent = mGrid;
-    VulkanSplit::ChangeTextureImage(device, (const void **)images.datas.data(), images.datas.size(), destination.width, destination.height, graphics, pool);
+    VulkanSplit::ChangeTextureImage(device, (const void **)images.datas.data(), images.datas.size(), width, height, graphics, pool);
     mGrid = imageExtent;
+}
+void SplitImage::UpdateTexture(VkDevice device, uint32_t index, const VkExtent2D &grid){
+    VkExtent2D offscreenGridSize;
+    offscreenGridSize.height = images.size.height / mRow;
+    offscreenGridSize.width = images.size.width / mColumn;
+    Uniform ubo;
+    ubo.imageIndex = index;
+    ubo.cartoons.degree = specialEffects.cartoon.degree;
+    ubo.cartoons.cartoons = specialEffects.cartoon.cartoons;
+    ubo.model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(mImagePos[index], 0)), glm::vec3(grid.width, grid.height, 1));
+    // ubo.model = glm::scale(glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(mImagePos[index], 0)), specialEffects.angle[index], glm::vec3(0, 0, 1)), glm::vec3(grid.width, grid.height, 1));
+    VulkanSplit::UpdateTexture(device, index, ubo);
+    ubo.model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(mOffscreenImagePos[index], 0)), glm::vec3(offscreenGridSize.width, offscreenGridSize.height, 1));
+    // ubo.model = glm::scale(glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(mOffscreenImagePos[index], 0)), specialEffects.angle[index], glm::vec3(0, 0, 1)), glm::vec3(offscreenGridSize.width, offscreenGridSize.height, 1));
+    UpdateOffscreenTexture(device, index, ubo);
 }

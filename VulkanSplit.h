@@ -24,6 +24,10 @@ struct Vertex {
         mUv = uv;
     }
 };
+struct CARTOONS{
+	glm::vec3 degree;
+	float cartoons;
+};
 struct PushConstant{
     glm::mat4 projection;
     //结构体对齐, 对齐, 对齐
@@ -31,6 +35,8 @@ struct PushConstant{
 };
 struct Uniform{
     glm::mat4 model;
+    //结构体对齐, 对齐, 对齐
+	CARTOONS cartoons;
     float imageIndex;
 };
 class VulkanSplit{
@@ -38,9 +44,9 @@ class VulkanSplit{
 #ifdef OFFSCREEN_DEBUG
         GraphicsPipeline debug;
 #endif
-        GraphicsPipeline pipeline;
-        GraphicsPipeline offscreen;
+        GraphicsPipeline texture;
         GraphicsPipeline background;
+        GraphicsPipeline offscreenTexture;
         GraphicsPipeline offscreenBackground;
     }pipelines;
     struct{
@@ -78,9 +84,9 @@ class VulkanSplit{
     void SetupDescriptorSetLayout(VkDevice device);
     VkResult PrepareOffscreenRenderpass(VkDevice device);
     void DrawGraphics(VkCommandBuffer command, const BaseGraphic *graphic);
-    // void SetupDescriptorSet(VkDevice device, VkDescriptorPool pool);
     void CreateRectResource(VkDevice device, VkQueue graphics, VkCommandPool pool);
-    void DrawImage(VkCommandBuffer command, uint32_t windowWidth, uint32_t windowHeight);
+    void DrawImage(VkCommandBuffer command, const glm::mat4&projection, VkDescriptorSet set, const GraphicsPipeline &texture);
+    void DrawBackground(VkCommandBuffer command, const glm::mat4&projection, VkDescriptorSet set, const glm::vec3&color, const GraphicsPipeline&background);
 protected:
     uint32_t mImageCount;
     int32_t mMinUniformBufferOffset;
@@ -109,10 +115,13 @@ public:
     void DestroyGraphicsPipeline(VkDevice device);
     void CreateGraphicsPipeline(VkDevice device, VkRenderPass renderpass, uint32_t scissorWidth, uint32_t scissorHeight);
 
-    void UpdateOffscreenBackground(VkDevice device, const VkExtent2D&size);
+    void UpdateTexture(VkDevice device, uint32_t index, const Uniform&ubo);
+    void UpdateOffscreenTexture(VkDevice device, uint32_t index, const Uniform&ubo);
+
+    void UpdateOffscreenBackground(VkDevice device);
     void UpdateBackground(VkDevice device, const glm::vec2&pos, const VkExtent2D&size);
-    void UpdateOffscreen(VkDevice device, uint32_t index, const glm::vec2&pos, const VkExtent2D&grid);
-    void UpdateTexture(VkDevice device, uint32_t index, const glm::vec2&pos, const VkExtent2D&grid);
+    // void UpdateTexture(VkDevice device, uint32_t index, const glm::vec2&pos, const VkExtent2D&grid);
+    // void UpdateOffscreenTexture(VkDevice device, uint32_t index, const glm::vec2&pos, const VkExtent2D&grid);
 
     void UpdateDescriptorSet(VkDevice device);
 

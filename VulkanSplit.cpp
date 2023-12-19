@@ -89,6 +89,16 @@ void VulkanSplit::CreateRectResource(VkDevice device, VkQueue graphics, VkComman
 
         Vertex(glm::vec3(1.0f, 1.0f, .0f), glm::vec2(1.0f, 1.0f))//右下
     };
+    // //偏移比原来少一半;大小必原来大一半
+    // // 再有需求换下面的顶点。直接在这个类的update*函数*.5或做其他调整即可
+    // const Vertex vertices[] = {
+    //     // 位置     // 纹理
+    //     Vertex(glm::vec3(-1.0f, 1.0f, .0f), glm::vec2(0.0f, 1.0f)),
+    //     Vertex(glm::vec3(1.0f, -1.0f, .0f), glm::vec2(1.0f, 0.0f)),
+    //     Vertex(glm::vec3(-1.0f, -1.0f, .0f), glm::vec2(0.0f, 0.0f)),
+
+    //     Vertex(glm::vec3(1.0f, 1.0f, .0f), glm::vec2(1.0f, 1.0f))
+    // };
     mRect.indexCount = 6;
     mRect.vertexCount = 0;
     mRect.index.CreateBuffer(device, sizeof(indices), VK_BUFFER_USAGE_INDEX_BUFFER_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT);
@@ -98,16 +108,26 @@ void VulkanSplit::CreateRectResource(VkDevice device, VkQueue graphics, VkComman
     vkf::tool::CopyBuffer(device, sizeof(indices), indices, graphics, pool, mRect.index);
     vkf::tool::CopyBuffer(device, sizeof(vertices), vertices, graphics, pool, mRect.vertex);
 }
-void VulkanSplit::DrawImage(VkCommandBuffer command, uint32_t windowWidth, uint32_t windowHeight){
+void VulkanSplit::DrawImage(VkCommandBuffer command, const glm::mat4&projection, VkDescriptorSet set, const GraphicsPipeline &texture){
     uint32_t dynamicOffset;
-    const glm::mat4 projection = glm::ortho(0.0f, (float)windowWidth, 0.0f, (float)windowHeight, -1.0f, 1.0f);
-    pipelines.pipeline.BindPipeline(command);
-    pipelines.pipeline.PushPushConstant(command, VK_SHADER_STAGE_VERTEX_BIT, sizeof(glm::mat4), &projection);
+    texture.BindPipeline(command);
+    texture.PushPushConstant(command, VK_SHADER_STAGE_VERTEX_BIT, sizeof(glm::mat4), &projection);
     for (uint32_t i = 0; i < mImageCount; ++i){
         dynamicOffset = i * mMinUniformBufferOffset;
-        pipelines.pipeline.BindDescriptorSet(command, descriptorset.set, 1, &dynamicOffset);
+        texture.BindDescriptorSet(command, set, 1, &dynamicOffset);
         DrawGraphics(command, &mRect);
     }
+}
+void VulkanSplit::DrawBackground(VkCommandBuffer command, const glm::mat4&projection, VkDescriptorSet set, const glm::vec3&color, const GraphicsPipeline &background){
+    PushConstant pc;
+    uint32_t dynamicOffset = 0;
+    pc.color = color;
+    pc.projection = projection;
+    background.BindPipeline(command);
+    background.BindDescriptorSet(command, set, 1, &dynamicOffset);
+    background.PushPushConstant(command, VK_SHADER_STAGE_VERTEX_BIT, sizeof(PushConstant), &pc);
+    //绘制背景
+    DrawGraphics(command, &mRect);
 }
 #ifdef OFFSCREEN_DEBUG
 void VulkanSplit::DrawDebug(VkCommandBuffer command, uint32_t windowWidth, uint32_t windowHeight){
@@ -229,18 +249,11 @@ void VulkanSplit::Setup(VkPhysicalDevice physicalDevice, VkDevice device, VkQueu
 }
 
 void VulkanSplit::Draw(VkCommandBuffer command, uint32_t windowWidth, uint32_t windowHeight, const glm::vec3&color){
-    PushConstant pc;
-    uint32_t dynamicOffset = 0;
-    pc.color = color;
-    pc.projection = glm::ortho(0.0f, (float)windowWidth, 0.0f, (float)windowHeight, -1.0f, 1.0f);
-    pipelines.background.BindPipeline(command);
-    pipelines.background.BindDescriptorSet(command, descriptorset.background, 1, &dynamicOffset);
-    pipelines.background.PushPushConstant(command, VK_SHADER_STAGE_VERTEX_BIT, sizeof(PushConstant), &pc);
-    //绘制背景
-    DrawGraphics(command, &mRect);
     if(mTexture.image != VK_NULL_HANDLE){
+        const glm::mat4 projection = glm::ortho(0.0f, (float)windowWidth, 0.0f, (float)windowHeight, -1.0f, 1.0f);
+        DrawBackground(command, projection, descriptorset.background, color, pipelines.background);
         //绘制九宫格图片
-        DrawImage(command, windowWidth, windowHeight);
+        DrawImage(command, projection, descriptorset.set, pipelines.texture);
     }
 }
 
@@ -257,24 +270,13 @@ void VulkanSplit::RerodOffscreenCommand(const glm::vec3 &color){
     rect.extent.height = offscreenPass.height;
     vkCmdSetScissor(offscreenPass.command, 0, 1, &rect);
     vkCmdSetViewport(offscreenPass.command, 0, 1, &viewport);
-    PushConstant pc;
-    uint32_t dynamicOffset = 0;
-    pc.color = color;
-    pc.projection = glm::ortho(0.0f, (float)offscreenPass.width, 0.0f, (float)offscreenPass.height, -1.0f, 1.0f);
-    pipelines.offscreenBackground.BindPipeline(offscreenPass.command);
-    pipelines.offscreenBackground.BindDescriptorSet(offscreenPass.command, descriptorset.offscreenBackground, 1, &dynamicOffset);
-    pipelines.offscreenBackground.PushPushConstant(offscreenPass.command, VK_SHADER_STAGE_VERTEX_BIT, sizeof(PushConstant), &pc);
-    //绘制背景
-    DrawGraphics(offscreenPass.command, &mRect);
     if(mTexture.image != VK_NULL_HANDLE){
+        // PushConstant pc;
+        uint32_t dynamicOffset = 0;
+        const glm::mat4 projection = glm::ortho(0.0f, (float)offscreenPass.width, 0.0f, (float)offscreenPass.height, -1.0f, 1.0f);
+        DrawBackground(offscreenPass.command, projection, descriptorset.offscreenBackground, color, pipelines.offscreenBackground);
         //绘制九宫格图片
-        pipelines.offscreen.BindPipeline(offscreenPass.command);
-        pipelines.offscreen.PushPushConstant(offscreenPass.command, VK_SHADER_STAGE_VERTEX_BIT, sizeof(glm::mat4), &pc.projection);
-        for (uint32_t i = 0; i < mImageCount; ++i){
-            dynamicOffset = i * mMinUniformBufferOffset;
-            pipelines.offscreen.BindDescriptorSet(offscreenPass.command, descriptorset.offscreenPosition, 1, &dynamicOffset);
-            DrawGraphics(offscreenPass.command, &mRect);
-        }
+        DrawImage(offscreenPass.command, projection, descriptorset.offscreenPosition, pipelines.offscreenTexture);
     }
     vkCmdEndRenderPass(offscreenPass.command);
     vkEndCommandBuffer(offscreenPass.command);
@@ -283,14 +285,14 @@ void VulkanSplit::RerodOffscreenCommand(const glm::vec3 &color){
 void VulkanSplit::DestroyGraphicsPipeline(VkDevice device){
     vkf::DestroyPipelineCache(device, "GraphicsPipelineCache", mPipelineCache);
 
-    pipelines.offscreen.DestroyLayout(device);
-    pipelines.offscreen.DestroyPipeline(device);
+    pipelines.offscreenTexture.DestroyLayout(device);
+    pipelines.offscreenTexture.DestroyPipeline(device);
 
     pipelines.background.DestroyLayout(device);
     pipelines.background.DestroyPipeline(device);
 
-    pipelines.pipeline.DestroyLayout(device);
-    pipelines.pipeline.DestroyPipeline(device);
+    pipelines.texture.DestroyLayout(device);
+    pipelines.texture.DestroyPipeline(device);
 
     pipelines.offscreenBackground.DestroyLayout(device);
     pipelines.offscreenBackground.DestroyPipeline(device);
@@ -300,16 +302,16 @@ void VulkanSplit::CreateGraphicsPipeline(VkDevice device, VkRenderPass renderpas
     vkf::CreatePipelineCache(device, "GraphicsPipelineCache", mPipelineCache);
     // pipelines.offscreen.PushScissor(offscreenPass.width, offscreenPass.height);
     // pipelines.offscreen.PushViewport(offscreenPass.width, offscreenPass.height);
-    pipelines.offscreen.PushShader(device, VK_SHADER_STAGE_VERTEX_BIT, "shaders/baseVert.spv");
-    pipelines.offscreen.PushShader(device, VK_SHADER_STAGE_FRAGMENT_BIT, "shaders/baseFrag.spv");
+    pipelines.offscreenTexture.PushShader(device, VK_SHADER_STAGE_VERTEX_BIT, "shaders/baseVert.spv");
+    pipelines.offscreenTexture.PushShader(device, VK_SHADER_STAGE_FRAGMENT_BIT, "shaders/baseFrag.spv");
 
-    pipelines.offscreen.PushVertexInputBindingDescription(sizeof(Vertex));
-    pipelines.offscreen.PushPushConstant(sizeof(glm::mat4), VK_SHADER_STAGE_VERTEX_BIT);
-    pipelines.offscreen.PushVertexInputAttributeDescription(0, 0, VK_FORMAT_R32G32B32_SFLOAT);
-    pipelines.offscreen.PushVertexInputAttributeDescription(1, offsetof(Vertex, Vertex::mUv), VK_FORMAT_R32G32_SFLOAT);
+    pipelines.offscreenTexture.PushVertexInputBindingDescription(sizeof(Vertex));
+    pipelines.offscreenTexture.PushPushConstant(sizeof(glm::mat4), VK_SHADER_STAGE_VERTEX_BIT);
+    pipelines.offscreenTexture.PushVertexInputAttributeDescription(0, 0, VK_FORMAT_R32G32B32_SFLOAT);
+    pipelines.offscreenTexture.PushVertexInputAttributeDescription(1, offsetof(Vertex, Vertex::mUv), VK_FORMAT_R32G32_SFLOAT);
 
-    pipelines.offscreen.CreateLayout(device, { mSetLayout });
-    pipelines.offscreen.CreatePipeline(device, offscreenPass.renderPass, mPipelineCache);
+    pipelines.offscreenTexture.CreateLayout(device, { mSetLayout });
+    pipelines.offscreenTexture.CreatePipeline(device, offscreenPass.renderPass, mPipelineCache);
 #ifdef OFFSCREEN_DEBUG
     VkRect2D rect = {};
     rect.extent.width = scissorWidth * .25;
@@ -341,19 +343,19 @@ void VulkanSplit::CreateGraphicsPipeline(VkDevice device, VkRenderPass renderpas
     pipelines.offscreenBackground.CreateLayout(device, { mSetLayout });
     pipelines.offscreenBackground.CreatePipeline(device, offscreenPass.renderPass, mPipelineCache);
     //---------------------------------
-    pipelines.pipeline.PushShader(device, VK_SHADER_STAGE_VERTEX_BIT, "shaders/baseVert.spv");
-    pipelines.pipeline.PushShader(device, VK_SHADER_STAGE_FRAGMENT_BIT, "shaders/baseFrag.spv");
+    pipelines.texture.PushShader(device, VK_SHADER_STAGE_VERTEX_BIT, "shaders/baseVert.spv");
+    pipelines.texture.PushShader(device, VK_SHADER_STAGE_FRAGMENT_BIT, "shaders/baseFrag.spv");
 
-    pipelines.pipeline.PushScissor(scissorWidth, scissorHeight);
-    pipelines.pipeline.PushViewport(scissorWidth, scissorHeight);
+    pipelines.texture.PushScissor(scissorWidth, scissorHeight);
+    pipelines.texture.PushViewport(scissorWidth, scissorHeight);
 
-    pipelines.pipeline.PushVertexInputBindingDescription(sizeof(Vertex));
-    pipelines.pipeline.PushPushConstant(sizeof(glm::mat4), VK_SHADER_STAGE_VERTEX_BIT);
-    pipelines.pipeline.PushVertexInputAttributeDescription(0, 0, VK_FORMAT_R32G32B32_SFLOAT);
-    pipelines.pipeline.PushVertexInputAttributeDescription(1, offsetof(Vertex, Vertex::mUv), VK_FORMAT_R32G32_SFLOAT);
+    pipelines.texture.PushVertexInputBindingDescription(sizeof(Vertex));
+    pipelines.texture.PushPushConstant(sizeof(glm::mat4), VK_SHADER_STAGE_VERTEX_BIT);
+    pipelines.texture.PushVertexInputAttributeDescription(0, 0, VK_FORMAT_R32G32B32_SFLOAT);
+    pipelines.texture.PushVertexInputAttributeDescription(1, offsetof(Vertex, Vertex::mUv), VK_FORMAT_R32G32_SFLOAT);
 
-    pipelines.pipeline.CreateLayout(device, { mSetLayout });
-    pipelines.pipeline.CreatePipeline(device, renderpass, mPipelineCache);
+    pipelines.texture.CreateLayout(device, { mSetLayout });
+    pipelines.texture.CreatePipeline(device, renderpass, mPipelineCache);
 
     pipelines.background.PushShader(device, VK_SHADER_STAGE_VERTEX_BIT, "shaders/baseColorVert.spv");
     pipelines.background.PushShader(device, VK_SHADER_STAGE_FRAGMENT_BIT, "shaders/baseColorFrag.spv");
@@ -369,26 +371,32 @@ void VulkanSplit::CreateGraphicsPipeline(VkDevice device, VkRenderPass renderpas
     pipelines.background.CreateLayout(device, { mSetLayout });
     pipelines.background.CreatePipeline(device, renderpass, mPipelineCache);
 }
-void VulkanSplit::UpdateOffscreenBackground(VkDevice device, const VkExtent2D&size){
-    const glm::mat4 model = glm::scale(glm::mat4(1), glm::vec3(size.width, size.height, 1));
+void VulkanSplit::UpdateOffscreenBackground(VkDevice device){
+    const glm::mat4 model = glm::scale(glm::mat4(1), glm::vec3(offscreenPass.width, offscreenPass.height, 1));
     uniform.offscreenBackground.UpdateData(device, &model);
 }
-void VulkanSplit::UpdateBackground(VkDevice device, const glm::vec2&pos, const VkExtent2D&size){
+void VulkanSplit::UpdateBackground(VkDevice device, const glm::vec2 &pos, const VkExtent2D &size){
     const glm::mat4 model = glm::scale(glm::translate(glm::mat4(1), glm::vec3(pos, 0)), glm::vec3(size.width, size.height, 1));
     uniform.background.UpdateData(device, &model);
 }
-void VulkanSplit::UpdateOffscreen(VkDevice device, uint32_t index, const glm::vec2&pos, const VkExtent2D&grid){
-    Uniform ubo;
-    ubo.imageIndex = index;
-    ubo.model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(pos, 0)), glm::vec3(grid.width, grid.height, 1));
+void VulkanSplit::UpdateOffscreenTexture(VkDevice device, uint32_t index, const Uniform&ubo){
     uniform.offscreenPosition.UpdateData(device, mMinUniformBufferOffset, &ubo, mMinUniformBufferOffset * index);
 }
-void VulkanSplit::UpdateTexture(VkDevice device, uint32_t index, const glm::vec2&pos, const VkExtent2D&grid){
-    Uniform ubo;
-    ubo.imageIndex = index;
-    ubo.model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(pos, 0)), glm::vec3(grid.width, grid.height, 1));
+void VulkanSplit::UpdateTexture(VkDevice device, uint32_t index, const Uniform&ubo){
     uniform.position.UpdateData(device, mMinUniformBufferOffset, &ubo, mMinUniformBufferOffset * index);
 }
+// void VulkanSplit::UpdateOffscreenTexture(VkDevice device, uint32_t index, const glm::vec2&pos, const VkExtent2D&grid){
+//     Uniform ubo;
+//     ubo.imageIndex = index;
+//     ubo.model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(pos, 0)), glm::vec3(grid.width * .5, grid.height * .5, 1));
+//     UpdateOffscreenTexture(device, index, ubo);
+// }
+// void VulkanSplit::UpdateTexture(VkDevice device, uint32_t index, const glm::vec2&pos, const VkExtent2D&grid){
+//     Uniform ubo;
+//     ubo.imageIndex = index;
+//     ubo.model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(pos, 0)), glm::vec3(grid.width * .5, grid.height * .5, 1));
+//     UpdateTexture(device, index, ubo);
+// }
 void VulkanSplit::UpdateDescriptorSet(VkDevice device){
     VkDescriptorSetLayoutBinding setlayoutBindings[2] = {};
     setlayoutBindings[0].descriptorCount = 1;
