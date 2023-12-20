@@ -41,13 +41,17 @@ void (*g_OpenFileFunCall)(const std::string&file);
 std::vector<const char *>g_FileTypeItem;
 
 struct{
+    // bool swap;
     bool change;
     bool complete;
     bool screenhot;
+    // SPLIT_TYPE splitType = SPLIT_TYPE_UNKNOW;
 }g_ImageOperate;
 SplitImage g_Split;
+bool g_ShowMessageBox;
+int32_t g_SelectImage = -1;
 IMGUI_WINDOW_INFO g_ImguiInfo;
-static std::vector<int32_t>g_SelectImage;
+// static std::vector<int32_t>g_SelectImage;
 std::string g_ImageName, g_SaveImageName, g_WindowName = "九宫格";
 // void createSurface(VkInstance instance, VkSurfaceKHR&surface, void* userData){
 //     glfwCreateWindowSurface(instance, (GLFWwindow *)userData, nullptr, &surface);
@@ -420,10 +424,25 @@ bool MessageBox(const std::string&message, const std::string&title){
     return true;
 }
 void DeselectedImage(uint32_t imageIndex){
-    g_SelectImage[imageIndex] = -1;
-    g_Split.UpdateTexture(g_VulkanDevice.device, imageIndex, g_Split.GetGridSize());
+    g_SelectImage = -1;
+    // g_SelectImage[imageIndex] = -1;
+    VkExtent2D grid = g_Split.GetGridSize();
+    const uint32_t offset = g_Split.GetOffset();
+    const uint32_t increaseRow = g_Split.GetIncreaseRow(), increaseColumn = g_Split.GetIncreaseColumn();
+    if(increaseRow > 1 && increaseColumn > 1 && imageIndex == g_Split.GetIncreaseIndex()){
+        grid.height = grid.height * increaseRow + (increaseRow - 1) * offset;
+        grid.width = grid.width * increaseColumn + (increaseColumn - 1) * offset;
+    }
+    g_Split.UpdateTexture(g_VulkanDevice.device, imageIndex, grid);
 }
 void SwapImage(uint32_t sourceIndex, uint32_t destIndex){
+    g_SelectImage = -1;
+    const uint32_t index = g_Split.GetIncreaseIndex();
+    if(sourceIndex == index || destIndex == index){
+        DeselectedImage(destIndex);
+        DeselectedImage(sourceIndex);
+        return;
+    }
     g_Split.SwapImage(g_VulkanDevice.device, sourceIndex, destIndex, g_VulkanQueue.graphics, g_VulkanPool.commandPool);
     // g_Split.UpdateBackground(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
     g_Split.UpdateImage(g_VulkanDevice.device);
@@ -431,39 +450,45 @@ void SwapImage(uint32_t sourceIndex, uint32_t destIndex){
 }
 void SelectedImage(uint32_t imageIndex){
     VkExtent2D grid = g_Split.GetGridSize();
+    const uint32_t offset = g_Split.GetOffset();
+    const uint32_t increaseRow = g_Split.GetIncreaseRow(), increaseColumn = g_Split.GetIncreaseColumn();
+    if(increaseRow > 1 && increaseColumn > 1 && imageIndex == g_Split.GetIncreaseIndex()){
+        grid.height = grid.height * increaseRow + (increaseRow - 1) * offset;
+        grid.width = grid.width * increaseColumn + (increaseColumn - 1) * offset;
+    }
     grid.width *= 1.05f;
     grid.height *= 1.05f;
     // g_Split.UpdateBackground(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
     g_Split.UpdateTexture(g_VulkanDevice.device, imageIndex, grid);
 }
-void SelectAll(){
-    g_SelectImage.resize(g_Split.GetRow() * g_Split.GetColumn());
-    for (size_t i = 0; i < g_SelectImage.size(); ++i){
-        SelectedImage(i);
-        g_SelectImage[i] = i;
-    }
-}
-void DeselectedAll(){
-    g_SelectImage.clear();
-    // g_Split.UpdateBackground(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
-    g_Split.UpdateImage(g_VulkanDevice.device);
-}
-void ReverseSelectAll(){
-    const std::vector<int32_t>index = g_SelectImage;
-    SelectAll();
-    for (size_t i = 0; i < index.size(); ++i){
-        if(index[i] != -1){
-            DeselectedImage(index[i]);
-        }
-    }
-}
+// void SelectAll(){
+//     g_SelectImage.resize(g_Split.GetRow() * g_Split.GetColumn());
+//     for (size_t i = 0; i < g_SelectImage.size(); ++i){
+//         SelectedImage(i);
+//         g_SelectImage[i] = i;
+//     }
+// }
+// void DeselectedAll(){
+//     g_SelectImage.clear();
+//     // g_Split.UpdateBackground(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
+//     g_Split.UpdateImage(g_VulkanDevice.device);
+// }
+// void ReverseSelectAll(){
+//     const std::vector<int32_t>index = g_SelectImage;
+//     SelectAll();
+//     for (size_t i = 0; i < index.size(); ++i){
+//         if(index[i] != -1){
+//             DeselectedImage(index[i]);
+//         }
+//     }
+// }
 /*{{{*/
 void updateImguiWidget(){
     // static bool checkbuttonstatu;//检查框的状态。这个值传给imgui会影响到检查框
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
     static int32_t rowAndcolumn[2] = { (int32_t)g_Split.GetRow(), (int32_t)g_Split.GetColumn() };
-    static bool bShowMessageBox = false;
+    static int32_t increaseRowAndColumn[2] = { (int32_t)g_Split.GetIncreaseRow(), (int32_t)g_Split.GetIncreaseColumn() };
     static std::string messageboxTitle = "提示", messageboxMessage;
     if(ImGui::BeginMainMenuBar()){
         if(ImGui::BeginMenu("文件")){
@@ -531,7 +556,6 @@ void updateImguiWidget(){
         }
         if(ImGui::BeginMenu("编辑")){
             if(ImGui::MenuItem("重置")){
-                // g_Split.ResetImageIndex();
                 OpenImage(g_ImageName);
             }
             if(ImGui::MenuItem("导入")){
@@ -539,63 +563,90 @@ void updateImguiWidget(){
             }
             ImGui::EndMenu();
         }
-        if(ImGui::BeginMenu("选择")){
-            if(ImGui::MenuItem("拼图")){
-                if(g_Split.IsLoadTexture()){
-                    g_WindowName = "拼图";
-                    g_Split.SetSplitType(JIGSAW);
-                    rowAndcolumn[0] = 4;
-                    rowAndcolumn[1] = 3;
-                    g_Split.SetRow(rowAndcolumn[0]);
-                    g_Split.SetColumn(rowAndcolumn[1]);
-                    OpenImage(g_ImageName);
-                }
-                else{
-                    bShowMessageBox = true;
-                    messageboxMessage = "请先添加图片后再试";
-                }
-            }
-            if(ImGui::MenuItem("九宫格")){
-                if(g_Split.IsLoadTexture()){
-                    g_WindowName = "九宫格";
-                    g_Split.SetSplitType(JIU_GONG_GE);
-                    rowAndcolumn[0] = 3;
-                    rowAndcolumn[1] = 3;
-                    g_Split.SetRow(rowAndcolumn[0]);
-                    g_Split.SetColumn(rowAndcolumn[1]);
-                    OpenImage(g_ImageName);
-                }
-                else{
-                    bShowMessageBox = true;
-                    messageboxMessage = "请先添加图片后再试";
-                }
-            }
-            ImGui::EndMenu();
-        }
+        // if(ImGui::BeginMenu("选择")){
+        //     if(ImGui::MenuItem("拼图")){
+        //         if(g_Split.IsLoadTexture()){
+        //             g_WindowName = "拼图";
+        //             g_ImageOperate.splitType = SPLIT_TYPE_JIGSAW;
+        //             rowAndcolumn[0] = 4;
+        //             rowAndcolumn[1] = 3;
+        //             g_Split.SetRow(rowAndcolumn[0]);
+        //             g_Split.SetColumn(rowAndcolumn[1]);
+        //             OpenImage(g_ImageName);
+        //         }
+        //         else{
+        //             g_ShowMessageBox = true;
+        //             messageboxMessage = "请先添加图片后再试";
+        //         }
+        //     }
+        //     if(ImGui::MenuItem("九宫格")){
+        //         if(g_Split.IsLoadTexture()){
+        //             g_WindowName = "九宫格";
+        //             g_ImageOperate.splitType = SPLIT_TYPE_JIU_GONG_GE;
+        //             rowAndcolumn[0] = 3;
+        //             rowAndcolumn[1] = 3;
+        //             g_Split.SetRow(rowAndcolumn[0]);
+        //             g_Split.SetColumn(rowAndcolumn[1]);
+        //             OpenImage(g_ImageName);
+        //         }
+        //         else{
+        //             g_ShowMessageBox = true;
+        //             messageboxMessage = "请先添加图片后再试";
+        //         }
+        //     }
+        //     ImGui::EndMenu();
+        // }
         ImGui::EndMainMenuBar();
     }
     static float backgroundColor[3] = { 1, 1, 1 };
     if(ImGui::Begin(g_WindowName.c_str())){
         g_ImguiInfo.pos = ImGui::GetWindowPos();
         g_ImguiInfo.size = ImGui::GetWindowSize();
-        if(ImGui::InputInt2("行列", rowAndcolumn)){
-            g_Split.SetRow(rowAndcolumn[0]);
-            g_Split.SetColumn(rowAndcolumn[1]);
-            if(g_Split.IsLoadTexture())OpenImage(g_ImageName);
+        //最多放大一张图片
+        if(g_Split.IsLoadTexture()){
+            if(ImGui::InputInt2("行列", rowAndcolumn)){
+                if(rowAndcolumn[0] != 0 && rowAndcolumn[1] != 0){
+                    g_Split.SetRow(rowAndcolumn[0]);
+                    g_Split.SetColumn(rowAndcolumn[1]);
+                    if(g_Split.IsLoadTexture())OpenImage(g_ImageName);
+                }
+            }
+            if(ImGui::InputInt2("选中图片行列", increaseRowAndColumn)){
+                //输入完后，仍然会一直执行, 直到点一下其他地方
+                if(g_SelectImage != -1){
+                    // uint32_t index = g_Split.GetIncreaseIndex();
+                    // if(index != g_SelectImage){
+                    //     increaseRowAndColumn[0] = 1;                    
+                    //     increaseRowAndColumn[1] = 1;
+                    // }
+                    g_Split.IncreaseImage(g_SelectImage, increaseRowAndColumn[0], increaseRowAndColumn[1]);
+                    if(g_Split.IsLoadTexture() && increaseRowAndColumn[0] > 1 && increaseRowAndColumn[1] > 1){
+                        OpenImage(g_ImageName);
+                    }
+                }
+                else{
+                    increaseRowAndColumn[0] = 1;                    
+                    increaseRowAndColumn[1] = 1;
+                }
+            }
         }
         if(ImGui::ColorEdit3("背景色", backgroundColor)){
             g_Split.ChangeBackgroundColor(glm::vec3(backgroundColor[0], backgroundColor[1], backgroundColor[2]));
             g_Split.UpdateBackground(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
         }
-        static float cartoons = g_Split.GetCartoons();
-        static float degree[] = { g_Split.GetDegree().x, g_Split.GetDegree().y, g_Split.GetDegree().z };
-        if(ImGui::SliderFloat("卡通化因子", &cartoons, 0, 20)){
-            g_Split.SetCartoons(cartoons);
-            g_Split.UpdateImage(g_VulkanDevice.device);
-        }
-        if(ImGui::InputFloat3("卡通化程度", degree)){
-            g_Split.SetDegree(glm::vec3(degree[0], degree[1], degree[2]));
-            g_Split.UpdateImage(g_VulkanDevice.device);
+        //虽然散图无法不带特效。但可以先输出完整图片，再从完整图片截图....
+        //完整图片是按真实图片大小输出的
+        if(g_Split.IsLoadTexture()){
+            static float cartoons = g_Split.GetCartoons();
+            static float degree[] = { g_Split.GetDegree().x, g_Split.GetDegree().y, g_Split.GetDegree().z };
+            if(ImGui::SliderFloat("卡通化因子", &cartoons, 0, 20)){
+                g_Split.SetCartoons(cartoons);
+                g_Split.UpdateImage(g_VulkanDevice.device);
+            }
+            if(ImGui::InputFloat3("卡通化程度", degree)){
+                g_Split.SetDegree(glm::vec3(degree[0], degree[1], degree[2]));
+                g_Split.UpdateImage(g_VulkanDevice.device);
+            }
         }
         // for (size_t i = 0; i < g_SelectImage.size(); ++i){
         //     if(g_SelectImage[i] != -1){
@@ -608,21 +659,22 @@ void updateImguiWidget(){
         //         }
         //     }   
         // }
-        if(ImGui::BeginTable("表_对齐", 3)){
-            ImGui::TableNextColumn();
-            if(ImGui::Button("全选")){
-                SelectAll();
-            }
-            ImGui::TableNextColumn();
-            if(ImGui::Button("取消全选")){
-                DeselectedAll();
-            }
-            ImGui::TableNextColumn();
-            if(ImGui::Button("反向全选")){
-                ReverseSelectAll();
-            }
-            ImGui::EndTable();
-        }
+        //因为特效是直接往所有图片加, 所以选择图片用处不大
+        // if(ImGui::BeginTable("表_对齐", 3)){
+        //     ImGui::TableNextColumn();
+        //     if(ImGui::Button("全选")){
+        //         SelectAll();
+        //     }
+        //     ImGui::TableNextColumn();
+        //     if(ImGui::Button("取消全选")){
+        //         DeselectedAll();
+        //     }
+        //     ImGui::TableNextColumn();
+        //     if(ImGui::Button("反向全选")){
+        //         ReverseSelectAll();
+        //     }
+        //     ImGui::EndTable();
+        // }
         ImGui::End();
     }
     if(g_ShowOpenFileUI){
@@ -641,9 +693,9 @@ void updateImguiWidget(){
             g_FileTypeItem.clear();
         }
     }
-    if(bShowMessageBox){
-        bShowMessageBox = MessageBox(messageboxMessage, messageboxTitle);
-        if(!bShowMessageBox)messageboxMessage = "";
+    if(g_ShowMessageBox){
+        g_ShowMessageBox = MessageBox(messageboxMessage, messageboxTitle);
+        if(!g_ShowMessageBox)messageboxMessage = "";
     }
     ImGui::Render();
     ImDrawData *draw_data = ImGui::GetDrawData();
@@ -694,7 +746,7 @@ void setupVulkan(GLFWwindow *window){
     vkf::CreateCommandPool(g_VulkanDevice.physicalDevice, g_VulkanDevice.device, g_VulkanPool.commandPool, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
     vkf::CreateFrameBufferForSwapchain(g_VulkanDevice.device, { g_WindowWidth, g_WindowHeight }, g_VulkanWindows);
     vkf::CreateSemaphoreAndFenceForSwapchain(g_VulkanDevice.device, g_VulkanWindows.swapchainImageViews.size(), g_VulkanSynchronize);
-    vkf::CreateDescriptorPool(g_VulkanDevice.device, 6, g_VulkanPool.descriptorPool);
+    vkf::CreateDescriptorPool(g_VulkanDevice.device, 11, g_VulkanPool.descriptorPool);
     //显示设备信息
     const char *deviceType;
     VkPhysicalDeviceProperties physicalDeviceProperties;
@@ -743,19 +795,27 @@ void cleanupVulkan(){
     vkDestroyDevice(g_VulkanDevice.device, nullptr);
     vkDestroyInstance(g_VulkanDevice.instance, nullptr);
 }
-bool g_PressA, g_PressControl;
+bool g_PressS, g_PressControl;
 //action `GLFW_PRESS`, `GLFW_RELEASE` or `GLFW_REPEAT`.  Future
 void keyboard(GLFWwindow *window, int key, int scancode, int action, int mods){
-    if(action == GLFW_PRESS){
-        if(key == GLFW_KEY_A){
-            g_PressA = true;
+    if(action == GLFW_PRESS && g_Split.IsLoadTexture()){
+        if(key == GLFW_KEY_S){
+            g_PressS = true;
         }
         if(key == GLFW_KEY_LEFT_CONTROL || key == GLFW_KEY_RIGHT_CONTROL){
             g_PressControl = true;
         }
-        if(g_PressControl && g_PressA){
-            SelectAll();
-            g_PressA = false;
+        //保存的是完整图片。保存散图必须通过:打开->保存->散图
+        if(g_PressControl && g_PressS){
+            g_ImageOperate.complete = true;
+            g_ShowOpenFolderUI = true;
+            g_OpenFileFunCall = SaveImage;
+            g_FileTypeItem.push_back("*.*");
+            g_FileTypeItem.push_back("*.gif");
+            g_FileTypeItem.push_back("*.bmp");
+            g_FileTypeItem.push_back("*.jpg");
+            g_FileTypeItem.push_back("*.png");
+            g_PressS = false;
             g_PressControl = false;
         }
     }
@@ -775,7 +835,7 @@ void keyboard(GLFWwindow *window, int key, int scancode, int action, int mods){
 //     //     }
 //     // }
 //     // else{
-//     //     if(g_Split.mousecursor(xpos, ypos, index)){
+//     //     if(g_Split.MouseCursor(xpos, ypos, index)){
 //     //         const glm::vec2 pos = g_Split.GetImagePos(index);
 //     //         if(g_SelectImageIndex != -1 && g_SelectImageIndex != index){
 //     //             // g_Split.SwapImage(g_SelectImageIndex, index);
@@ -797,73 +857,85 @@ void keyboard(GLFWwindow *window, int key, int scancode, int action, int mods){
 //     //     }
 //     // }
 // }
-/*
-    选择图片//没选图使用效果则默认所有图
-    可以考虑去掉拖拽图片，改为选择图片->选另一张交换
-    全选图片
-    旋转图片
-    各种效果
-*/
-bool CanSwapImage(const std::vector<int32_t>&index){
-    uint32_t count = 0;
-    for (size_t i = 0; i < index.size(); ++i){
-        if(index[i] != -1){
-            ++count;
-        }
-    }
-    return count == 1;
-}
-int32_t IsSelected(const std::vector<int32_t>&index, int32_t imageIndex){
-    int32_t iSelected = -1;
-    auto it = std::find(index.begin(), index.end(), imageIndex);
-    if(it != index.end()){
-        iSelected = *it;
-    }
-    // for (size_t i = 0; i < index.size(); ++i){
-    //     if(index[i] == imageIndex){
-    //         iSelected = i;
-    //         break;
-    //     }
-    // }
-    return iSelected;
-}
+// bool CanSwapImage(const std::vector<int32_t>&index){
+//     uint32_t count = 0;
+//     for (size_t i = 0; i < index.size(); ++i){
+//         if(index[i] != -1){
+//             ++count;
+//         }
+//     }
+//     return count == 1;
+// }
+// int32_t IsSelected(const std::vector<int32_t>&index, int32_t imageIndex){
+//     int32_t iSelected = -1;
+//     auto it = std::find(index.begin(), index.end(), imageIndex);
+//     if(it != index.end()){
+//         iSelected = *it;
+//     }
+//     // for (size_t i = 0; i < index.size(); ++i){
+//     //     if(index[i] == imageIndex){
+//     //         iSelected = i;
+//     //         break;
+//     //     }
+//     // }
+//     return iSelected;
+// }
 void mousebutton(GLFWwindow *window, int button, int action, int mods) {
-    if(g_ShowOpenFileUI || g_ShowOpenFolderUI)return;
+    if(g_ShowOpenFileUI || g_ShowOpenFolderUI || g_ShowMessageBox)return;
     double xpos, ypos;
     glfwGetCursorPos(window, &xpos, &ypos);
     if(xpos > g_ImguiInfo.pos.x && xpos < g_ImguiInfo.pos.x + g_ImguiInfo.size.x && ypos > g_ImguiInfo.pos.y && ypos < g_ImguiInfo.pos.y + g_ImguiInfo.size.y)return;
-    // g_LeftDown = action;
     if(GLFW_MOUSE_BUTTON_LEFT == button && GLFW_PRESS == action){
-        int32_t index;
-        const bool bPressControl = GLFW_PRESS == glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) || GLFW_PRESS == glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL);
-        if(g_SelectImage.empty() || bPressControl){
-            if(g_Split.mousecursor(xpos, ypos, index)){
-                const int32_t selectedIndex = IsSelected(g_SelectImage, index);
-                if(g_SelectImage.empty() || selectedIndex == -1){
-                    g_SelectImage.push_back(index);
-                }
-                else{
-                    DeselectedImage(index);
-                }
-                for (size_t i = 0; i < g_SelectImage.size(); ++i){
-                    if(g_SelectImage[i] != -1){
-                        SelectedImage(g_SelectImage[i]);
-                    }
-                }
+        if(g_SelectImage == -1){
+            if(g_Split.MouseCursor(xpos, ypos, g_SelectImage)){
+                SelectedImage(g_SelectImage);
             }
         }
         else{
-            if(CanSwapImage(g_SelectImage)){
-                if(g_Split.mousecursor(xpos, ypos, index)){
-                    if(index != g_SelectImage[0]){
-                        SwapImage(g_SelectImage[0], index);
-                    }
+            int32_t index;
+            if(g_Split.MouseCursor(xpos, ypos, index)){
+                if(g_SelectImage == index){
+                    DeselectedImage(g_SelectImage);
                 }
-                DeselectedAll();
-                g_SelectImage.clear();
+                else{
+                    SwapImage(g_SelectImage, index);
+                    g_SelectImage = -1;
+                }
             }
         }
     }
+    // // g_LeftDown = action;
+    // if(GLFW_MOUSE_BUTTON_LEFT == button && GLFW_PRESS == action){
+    //     int32_t index;
+    //     const bool bPressControl = GLFW_PRESS == glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) || GLFW_PRESS == glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL);
+    //     if(g_SelectImage.empty() || bPressControl){
+    //         if(g_Split.mousecursor(xpos, ypos, index)){
+    //             const int32_t selectedIndex = IsSelected(g_SelectImage, index);
+    //             if(g_SelectImage.empty() || selectedIndex == -1){
+    //                 g_SelectImage.push_back(index);
+    //             }
+    //             else{
+    //                 DeselectedImage(index);
+    //             }
+    //             for (size_t i = 0; i < g_SelectImage.size(); ++i){
+    //                 if(g_SelectImage[i] != -1){
+    //                     SelectedImage(g_SelectImage[i]);
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     else{
+    //         if(CanSwapImage(g_SelectImage)){
+    //             if(g_Split.mousecursor(xpos, ypos, index)){
+    //                 if(index != g_SelectImage[0]){
+    //                     SwapImage(g_SelectImage[0], index);
+    //                 }
+    //             }
+    //             DeselectedAll();
+    //             g_SelectImage.clear();
+    //         }
+    //     }
+    // }
 }
 void RecordCommand(uint32_t currentFrame){
     vkf::tool::BeginCommands(g_CommandBuffer, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
@@ -950,13 +1022,21 @@ void display(GLFWwindow* window){
         g_ImageOperate.screenhot = false;
         g_Split.WriteImageToFile(g_VulkanDevice.physicalDevice, g_VulkanDevice.device, g_VulkanQueue.graphics, g_VulkanPool.commandPool, g_SaveImageName);
     }
+    // if(g_ImageOperate.splitType != SPLIT_TYPE_UNKNOW){
+    //     g_Split.SetSplitType(g_VulkanDevice.device, g_ImageName, g_ImageOperate.splitType, g_WindowWidth, g_WindowHeight, g_VulkanQueue.graphics, g_VulkanPool.commandPool);
+    //     g_ImageOperate.splitType = SPLIT_TYPE_UNKNOW;
+    // }
+
     if(g_ImageOperate.change){
         g_ImageOperate.change = false;
-        g_Split.ChangeTextureImage(g_VulkanDevice.device, g_ImageName, g_WindowWidth, g_WindowHeight, g_VulkanQueue.graphics, g_VulkanPool.commandPool);
+        if(g_SelectImage != -1)DeselectedImage(g_SelectImage);
+        g_Split.ChangeImage(g_VulkanDevice.device, g_ImageName, g_WindowWidth, g_WindowHeight, g_VulkanQueue.graphics, g_VulkanPool.commandPool);
 
         g_Split.UpdateDescriptorSet(g_VulkanDevice.device);
         g_Split.UpdateBackground(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
         g_Split.UpdateImage(g_VulkanDevice.device);
+        g_SelectImage = -1;
+        // g_Split.IncreaseImage(0, 1, 1);
     }
     RecordCommand(currentFrame);
     // vkf::DrawFrame(g_VulkanDevice.device, currentFrame, g_CommandBuffer, g_VulkanWindows.swapchain, g_VulkanQueue, g_VulkanSynchronize);

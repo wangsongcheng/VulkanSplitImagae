@@ -36,7 +36,7 @@ VkResult VulkanImage::CreateImage(VkDevice device, const VkExtent3D&extent, VkIm
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.mipLevels = 1;
     imageInfo.extent = size;
-    if(arrayLayer == 6)imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    if(arrayLayer == 6 && size.width == size.height)imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
     imageInfo.usage = usage;
     imageInfo.format = format;
     imageInfo.tiling = tiling;
@@ -578,11 +578,11 @@ void vkf::CreateTextureImage(VkDevice device, const VulkanBuffer&dataBuffer, uin
 	tool::EndSingleTimeCommands(device, pool, graphics, cmd);
 	image.CreateImageView(device, VK_FORMAT_R8G8B8A8_UNORM);
 }
-void vkf::CreateCubeImage(VkDevice device, const void *const *datas, uint32_t width, uint32_t height, VulkanImage &image, VkCommandPool pool, VkQueue graphics){
-    CreateImageArray(device, datas, 6, width, height, image, pool, graphics, VK_IMAGE_VIEW_TYPE_CUBE);
+void vkf::CreateCubeImage(VkDevice device, const void *const *datas, uint32_t width, VulkanImage &image, VkCommandPool pool, VkQueue graphics){
+    CreateImageArray(device, datas, 6, width, width, image, pool, graphics, VK_IMAGE_VIEW_TYPE_CUBE);
 }
-void vkf::CreateCubeImage(VkDevice device, const VulkanBuffer &dataBuffer, uint32_t width, uint32_t height, VulkanImage &image, VkCommandPool pool, VkQueue graphics){
-    CreateImageArray(device, dataBuffer, 6, width, height, image, pool, graphics, VK_IMAGE_VIEW_TYPE_CUBE);
+void vkf::CreateCubeImage(VkDevice device, const VulkanBuffer &dataBuffer, uint32_t width, VulkanImage &image, VkCommandPool pool, VkQueue graphics){
+    CreateImageArray(device, dataBuffer, 6, width, width, image, pool, graphics, VK_IMAGE_VIEW_TYPE_CUBE);
 }
 void vkf::CreateImageArray(VkDevice device, const void *const *datas, uint32_t imageCount, uint32_t width, uint32_t height, VulkanImage &image, VkCommandPool pool, VkQueue graphics, VkImageViewType type){
     // size_t imageCount = datas.size();

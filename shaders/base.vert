@@ -8,6 +8,7 @@ layout(location = 0) out vec2 outTexCoord;
 layout(location = 1) out float outCartoons;
 layout(location = 2) out float outImageIndex;
 layout(location = 3) out vec3  outCartoonsDegre;
+layout(location = 4) out float outUseImageArray;
 struct Cartoons{
 	vec3 degree;
 	float cartoons;
@@ -20,12 +21,14 @@ layout(binding = 0)uniform Uniform{
 	mat4 model;
 	Cartoons cartoon;
 	float imageIndex;
+	float useImageArray;
 }ubo;
 
 void main() {
 	outTexCoord = inTexCoord;
 	outImageIndex = ubo.imageIndex;
 	outCartoons = ubo.cartoon.cartoons;
+	outUseImageArray = ubo.useImageArray;
 	outCartoonsDegre = ubo.cartoon.degree;
 	gl_Position = pc.projection * ubo.model * vec4(inPos, 1.0);
 }

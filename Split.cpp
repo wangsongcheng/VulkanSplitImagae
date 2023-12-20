@@ -4,35 +4,107 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image.h"
 #include "stb_image_write.h"
-void copy(const stbi_uc *source, stbi_uc *destination, uint32_t row, uint32_t column, const VkExtent2D& sourceImage, const VkExtent2D& destinationImage) {
+void copy(const void *source, void *destination, uint32_t row, uint32_t column, const VkExtent2D& sourceImage, const VkExtent2D& destinationImage) {
     //如果要截取第2行的图片，需要跳过 row * 目标图片的高度 * 原图宽度
     uint32_t uiLineSize = destinationImage.width * 4;
     uint32_t uiSourceLineSize = sourceImage.width * 4;
     uint32_t imageOffsetStart = row * destinationImage.height * uiSourceLineSize + column * uiLineSize;
     for (size_t dataOffset = 0; dataOffset < destinationImage.height; ++dataOffset) {
-        memcpy(destination + dataOffset * uiLineSize, source + imageOffsetStart + dataOffset * uiSourceLineSize, uiLineSize);
+        memcpy((stbi_uc *)destination + dataOffset * uiLineSize, (stbi_uc *)source + imageOffsetStart + dataOffset * uiSourceLineSize, uiLineSize);
     }
 }
 void SplitImage::UpdateImage(VkDevice device){
-    for (uint32_t uiRow = 0; uiRow < mRow; ++uiRow){
-        for (uint32_t uiColumn = 0; uiColumn < mColumn; ++uiColumn){
-            const uint32_t index = ROW_COLUMN_INDEX(uiRow, uiColumn, mColumn);
-            if(mImagePos[index] != glm::vec2(0)){
-                UpdateTexture(device, index, mGrid);
-            }
-            // mImagePos[mImageIndex[index]] = glm::vec3(backgroundPos.x + uiColumn * splitImage.size.width + (uiColumn + 1) * offset, backgroundPos.y + uiRow * splitImage.size.height + (uiRow + 1) * offset, 0);
-            // UpdateTexture(device, mImageIndex[index], mImagePos[mImageIndex[index]], glm::vec2(splitImage.size.width, splitImage.size.height));
+    if(effects.increase.increase){
+        VkExtent2D imageSize = mGrid;
+        for (uint32_t index = 0; index < mImageCount; ++index){
+            UpdateTexture(device, index, mGridImage[index].size);
         }
     }
+    else{
+        for (uint32_t index = 0; index < mImageCount; ++index){
+            UpdateTexture(device, index, mGrid);
+        }
+    }
+    // if(mSplitType == SPLIT_TYPE_JIU_GONG_GE){
+    //     for (uint32_t uiRow = 0; uiRow < mRow; ++uiRow){
+    //         for (uint32_t uiColumn = 0; uiColumn < mColumn; ++uiColumn){
+    //             index = ROW_COLUMN_INDEX(uiRow, uiColumn, mColumn);
+    //             if(mImagePos[index] != glm::vec2(0)){
+    //                 UpdateTexture(device, index, mGrid);
+    //             }
+    //         }
+    //     }
+    // }
+    // else if(mSplitType == SPLIT_TYPE_JIGSAW){
+    //     //因为纹理数组图片大小必须一样, 或许可以改用只放大第一张图片的方式完成
+    //     //而且第一张图片切割的大小要改变
+    //     VkExtent2D firstImageSize = mGrid;
+    //     firstImageSize.height *= firstImage.row;
+    //     firstImageSize.width *= firstImage.column;
+    //     UpdateTexture(device, 0, firstImageSize);
+    //     for (uint32_t uiRow = 0; uiRow < mRow; ++uiRow){
+    //         for (uint32_t uiColumn = uiRow < firstImage.column?mColumn - firstImage.column + 1:0; uiColumn < mColumn; ++uiColumn){
+    //             ++index;
+    //             UpdateTexture(device, index, mGrid);
+    //         }
+    //     }
+    // }
 }
-void SplitImage::InitImagePos(uint32_t windowWidth, uint32_t windowHeight){
+void SplitImage::InitGridImageInfo(uint32_t windowWidth, uint32_t windowHeight){
+    uint32_t index = 0;
+    VkExtent2D offscreenGridSize;
     InitBackgroundPos(windowWidth, windowHeight);
-    if(mSplitType == JIGSAW){
-        InitJigsawPos(background.pos, background.size);
+    offscreenGridSize.height = images.size.height / mRow;
+    offscreenGridSize.width = images.size.width / mColumn;
+    if(effects.increase.increase){
+        //这里限定了必须选0
+        mGridImage.resize(mRow * mColumn - effects.increase.row * effects.increase.column + 1);
+        mOffscreenGridImage.resize(mRow * mColumn - effects.increase.row * effects.increase.column + 1);
+        mOffscreenGridImage[0].pos = glm::vec3(mOffset, mOffset, 0);
+        mGridImage[0].pos = glm::vec3(background.pos.x + mOffset, background.pos.y + mOffset, 0);
+        if(effects.increase.index == 0){
+            mGridImage[0].size.height = mGrid.height * effects.increase.column + (effects.increase.column - 1) * mOffset;
+            mGridImage[0].size.width = mGrid.width * effects.increase.column + (effects.increase.column - 1) * mOffset;
+            mOffscreenGridImage[0].size.height = offscreenGridSize.height * effects.increase.column + (effects.increase.column - 1) * mOffset;
+            mOffscreenGridImage[0].size.width = offscreenGridSize.width * effects.increase.column + (effects.increase.column - 1) * mOffset;
+        }
+        for (uint32_t uiRow = 0; uiRow < mRow; ++uiRow){
+            for (uint32_t uiColumn = uiRow < effects.increase.column?mColumn - effects.increase.column + 1:0; uiColumn < mColumn; ++uiColumn){
+                ++index;
+                if(effects.increase.index == index){
+                    mGridImage[index].size.height = mGrid.height * effects.increase.column + (effects.increase.column - 1) * mOffset;
+                    mGridImage[index].size.width = mGrid.width * effects.increase.column + (effects.increase.column - 1) * mOffset;
+                    mOffscreenGridImage[index].size.height = offscreenGridSize.height * effects.increase.row + (effects.increase.row - 1) * mOffset;
+                    mOffscreenGridImage[index].size.width = offscreenGridSize.width * effects.increase.column + (effects.increase.column - 1) * mOffset;
+                }
+                else{
+                    mGridImage[index].size = mGrid;
+                    mOffscreenGridImage[index].size = offscreenGridSize;
+                }
+                mOffscreenGridImage[index].pos = glm::vec2(uiColumn * offscreenGridSize.width + (uiColumn + 1) * mOffset, uiRow * offscreenGridSize.height + (uiRow + 1) * mOffset);
+                mGridImage[index].pos = glm::vec2(background.pos.x + uiColumn * mGrid.width + (uiColumn + 1) * mOffset, background.pos.y + uiRow * mGrid.height + (uiRow + 1) * mOffset);
+            }
+        }
     }
-    else if(mSplitType == JIU_GONG_GE){
-        InitJiuGongGePos(background.pos, background.size);
+    else{
+        mGridImage.resize(mRow * mColumn);
+        mOffscreenGridImage.resize(mGridImage.size());
+        for (uint32_t uiRow = 0; uiRow < mRow; ++uiRow){
+            for (uint32_t uiColumn = 0; uiColumn < mColumn; ++uiColumn){
+                index = ROW_COLUMN_INDEX(uiRow, uiColumn, mColumn);
+                mGridImage[index].size = mGrid;
+                mOffscreenGridImage[index].size = offscreenGridSize;
+                mOffscreenGridImage[index].pos = glm::vec2(uiColumn * offscreenGridSize.width + (uiColumn + 1) * mOffset, uiRow * offscreenGridSize.height + (uiRow + 1) * mOffset);
+                mGridImage[index].pos = glm::vec2(background.pos.x + uiColumn * mGrid.width + (uiColumn + 1) * mOffset, background.pos.y + uiRow * mGrid.height + (uiRow + 1) * mOffset);
+            }
+        }
     }
+    // if(mSplitType == SPLIT_TYPE_JIGSAW){
+    //     InitJigsawPos(background.pos, background.size);
+    // }
+    // else if(mSplitType == SPLIT_TYPE_JIU_GONG_GE){
+    //     InitJiuGongGePos(background.pos, background.size);
+    // }
 }
 void SplitImage::InitBackgroundPos(uint32_t windowWidth, uint32_t windowHeight){
     VkExtent2D imageSize;
@@ -41,37 +113,53 @@ void SplitImage::InitBackgroundPos(uint32_t windowWidth, uint32_t windowHeight){
     background.size = GetBackgroundSize(imageSize);
     background.pos = glm::vec3(windowWidth * .5 - background.size.width * .5, windowHeight * .5 - background.size.height * .5, 0);
 }
-void SplitImage::InitJigsawPos(const glm::vec3&backgroundPos, const VkExtent2D&backgroundSize){
-    const uint32_t offset = 10;
-    VkExtent2D offscreenGridSize;
-    mImagePos.resize(mRow * mColumn);
-    mOffscreenImagePos.resize(mRow * mColumn);
-    offscreenGridSize.height = images.size.height / mRow;
-    offscreenGridSize.width = images.size.width / mColumn;
-    mImagePos[0] = glm::vec3(background.pos.x + offset, background.pos.y + offset, 0);
-    for (uint32_t uiRow = mRow - 2; uiRow < mRow; ++uiRow){
-        for (uint32_t uiColumn = mColumn - 2; uiColumn < mColumn; ++uiColumn){
-            const uint32_t index = ROW_COLUMN_INDEX(uiRow, uiColumn, mColumn);
-            mOffscreenImagePos[index] = glm::vec2(uiColumn * offscreenGridSize.width + (uiColumn + 1) * offset, uiRow * offscreenGridSize.height + (uiRow + 1) * offset);
-            mImagePos[index] = glm::vec2(background.pos.x + uiColumn * mGrid.width + (uiColumn + 1) * offset, background.pos.y + uiRow * mGrid.height + (uiRow + 1) * offset);
-        }
-    }
-}
-void SplitImage::InitJiuGongGePos(const glm::vec3&backgroundPos, const VkExtent2D&backgroundSize){
-    const uint32_t offset = 10;
-    VkExtent2D offscreenGridSize;
-    mImagePos.resize(mRow * mColumn);
-    mOffscreenImagePos.resize(mRow * mColumn);
-    offscreenGridSize.height = images.size.height / mRow;
-    offscreenGridSize.width = images.size.width / mColumn;
-    for (uint32_t uiRow = 0; uiRow < mRow; ++uiRow){
-        for (uint32_t uiColumn = 0; uiColumn < mColumn; ++uiColumn){
-            const uint32_t index = ROW_COLUMN_INDEX(uiRow, uiColumn, mColumn);
-            mOffscreenImagePos[index] = glm::vec2(uiColumn * offscreenGridSize.width + (uiColumn + 1) * offset, uiRow * offscreenGridSize.height + (uiRow + 1) * offset);
-            mImagePos[index] = glm::vec2(background.pos.x + uiColumn * mGrid.width + (uiColumn + 1) * offset, background.pos.y + uiRow * mGrid.height + (uiRow + 1) * offset);
-        }
-    }
-}
+// void SplitImage::InitJigsawPos(const glm::vec3&backgroundPos, const VkExtent2D&backgroundSize){
+//     // uint32_t index = 0;
+//     //如果可以，不要这样直接改, 而是通过修改选定图片的大小
+//     // if(mSplitType == SPLIT_TYPE_JIGSAW){
+//     //     mImagePos.resize(mRow * mColumn - firstImage.row * firstImage.column + 1);
+//     //     mOffscreenImagePos.resize(mRow * mColumn - firstImage.row * firstImage.column + 1);
+//     //     offscreenGridSize.height = images.size.height / mRow;
+//     //     offscreenGridSize.width = images.size.width / mColumn;
+//     //     mOffscreenImagePos[0] = glm::vec2(offset, offset);
+//     //     mImagePos[0] = glm::vec2(background.pos.x + offset, background.pos.y + offset);
+//     //     for (uint32_t uiRow = 0; uiRow < mRow; ++uiRow){
+//     //         for (uint32_t uiColumn = uiRow < firstImage.column?mColumn - firstImage.column + 1:0; uiColumn < mColumn; ++uiColumn){
+//     //             ++index;
+//     //             mOffscreenImagePos[index] = glm::vec2(uiColumn * offscreenGridSize.width + (uiColumn + 1) * offset, uiRow * offscreenGridSize.height + (uiRow + 1) * offset);
+//     //             mImagePos[index] = glm::vec2(background.pos.x + uiColumn * mGrid.width + (uiColumn + 1) * offset, background.pos.y + uiRow * mGrid.height + (uiRow + 1) * offset);
+//     //         }
+//     //     }
+//     // }
+//     // else if(mSplitType == SPLIT_TYPE_JIU_GONG_GE){
+//         mImagePos.resize(mRow * mColumn);
+//         mOffscreenImagePos.resize(mRow * mColumn);
+//         offscreenGridSize.height = images.size.height / mRow;
+//         offscreenGridSize.width = images.size.width / mColumn;
+//         for (uint32_t uiRow = 0; uiRow < mRow; ++uiRow){
+//             for (uint32_t uiColumn = 0; uiColumn < mColumn; ++uiColumn){
+//                 const uint32_t index = ROW_COLUMN_INDEX(uiRow, uiColumn, mColumn);
+//                 mOffscreenImagePos[index] = glm::vec2(uiColumn * offscreenGridSize.width + (uiColumn + 1) * offset, uiRow * offscreenGridSize.height + (uiRow + 1) * offset);
+//                 mImagePos[index] = glm::vec2(background.pos.x + uiColumn * mGrid.width + (uiColumn + 1) * offset, background.pos.y + uiRow * mGrid.height + (uiRow + 1) * offset);
+//             }
+//         }
+//     // }
+// }
+// void SplitImage::InitJiuGongGePos(const glm::vec3&backgroundPos, const VkExtent2D&backgroundSize){
+//     const uint32_t offset = 10;
+//     VkExtent2D offscreenGridSize;
+//     mImagePos.resize(mRow * mColumn);
+//     mOffscreenImagePos.resize(mRow * mColumn);
+//     offscreenGridSize.height = images.size.height / mRow;
+//     offscreenGridSize.width = images.size.width / mColumn;
+//     for (uint32_t uiRow = 0; uiRow < mRow; ++uiRow){
+//         for (uint32_t uiColumn = 0; uiColumn < mColumn; ++uiColumn){
+//             const uint32_t index = ROW_COLUMN_INDEX(uiRow, uiColumn, mColumn);
+//             mOffscreenImagePos[index] = glm::vec2(uiColumn * offscreenGridSize.width + (uiColumn + 1) * offset, uiRow * offscreenGridSize.height + (uiRow + 1) * offset);
+//             mImagePos[index] = glm::vec2(background.pos.x + uiColumn * mGrid.width + (uiColumn + 1) * offset, background.pos.y + uiRow * mGrid.height + (uiRow + 1) * offset);
+//         }
+//     }
+// }
 SplitImage::SplitImage(/* args */){
 }
 
@@ -81,6 +169,7 @@ SplitImage::~SplitImage(){
 
 void SplitImage::Cleanup(VkDevice device){
     VulkanSplit::Cleanup(device);
+    delete[]mIncreaseImageDatas;
     for (size_t i = 0; i < images.datas.size(); ++i){
         delete[]images.datas[i];
     }
@@ -269,10 +358,9 @@ void SplitImage::Draw(VkCommandBuffer command, uint32_t windowWidth, uint32_t wi
 }
 
 void SplitImage::UpdateBackground(VkDevice device, uint32_t windowWidth, uint32_t windowHeight){
-    const uint32_t offset = 10;
     if(IsLoadTexture()){
-        VulkanSplit::UpdateBackground(device, background.pos, background.size);
         UpdateOffscreenBackground(device);
+        VulkanSplit::UpdateBackground(device, background.pos, background.size);
     }
     // else{
     //     VkExtent2D imageSize, backgroundSize;
@@ -284,16 +372,11 @@ void SplitImage::UpdateBackground(VkDevice device, uint32_t windowWidth, uint32_
 }
 
 void SplitImage::Setup(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphics, const VulkanPool &pool){
-    if(mSplitType == JIGSAW){
-        mRow = 4;
-        mColumn = 3;
-    }
-    else if(mSplitType == JIU_GONG_GE){
-        mRow = 3;
-        mColumn = 3;
-    }
+    mRow = 3;
+    mColumn = 3;
+    effects.increase.row = 1;
+    effects.increase.column = 1;
     // images.angle.resize(mColumn * mRow);
-    // ChangeTextureImage(device, "1.jpg", graphics, pool.commandPool);
     VulkanSplit::Setup(physicalDevice, device, graphics, pool, mRow * mColumn);
 }
 // void *Split::LoadTextureImage(VkDevice device, const std::string &image, VkExtent2D &size, VkQueue graphics, VkCommandPool pool){
@@ -335,13 +418,14 @@ void SplitImage::Setup(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue
 //     ChangeTextureImage(device, (const void **)mImageDatas.data(), mImageDatas.size(), destination.width, destination.height, graphics, pool);
 // }
 
-bool SplitImage::mousecursor(double xpos, double ypos, int32_t &index){
-    for (size_t i = 0; i < mImagePos.size(); ++i){
-        // if(xpos > mImagePos[mImageIndex[i]].x && ypos > mImagePos[mImageIndex[i]].y && xpos < mImagePos[mImageIndex[i]].x + mImageSize.width && ypos < mImagePos[mImageIndex[i]].y + mImageSize.height){
-        if(xpos > mImagePos[i].x && ypos > mImagePos[i].y && xpos < mImagePos[i].x + mGrid.width && ypos < mImagePos[i].y + mGrid.height){
-            index = i;
-            // index = mImageIndex[i];
-            return true;
+bool SplitImage::MouseCursor(double xpos, double ypos, int32_t &index){
+    for (size_t i = 0; i < mGridImage.size(); ++i){
+        if(xpos > mGridImage[i].pos.x && ypos > mGridImage[i].pos.y){
+            if(xpos < mGridImage[i].pos.x + mGridImage[i].size.width && ypos < mGridImage[i].pos.y + mGridImage[i].size.height){
+                index = i;
+                // index = mImageIndex[i];
+                return true;
+            }
         }
     }
     return false;
@@ -355,42 +439,23 @@ bool SplitImage::mousecursor(double xpos, double ypos, int32_t &index){
 //         printf("\n");
 //     }
 // }
-void SplitImage::ChangeTextureImage(VkDevice device, const std::string &image, uint32_t windowWidth, uint32_t windowHeight, VkQueue graphics, VkCommandPool pool){
+void SplitImage::ChangeImage(VkDevice device, const std::string &image, uint32_t windowWidth, uint32_t windowHeight, VkQueue graphics, VkCommandPool pool){
     int nrComponents;
-    VkExtent2D source, destination;
+    VkExtent2D source;
     stbi_uc* data = stbi_load(image.c_str(), (int *)&source.width, (int *)&source.height, &nrComponents, STBI_rgb_alpha);
     if(data == nullptr){
         printf("load picture error:%s\n", image.c_str());
         return;
     }
-    // PrintPixel(data, source.width, source.height);
-    destination.height = source.height / mRow;
-    destination.width = source.width / mColumn;
-    for (size_t i = 0; i < images.datas.size(); ++i){
-        delete[]images.datas[i];
-    }
-    images.datas.resize(mRow * mColumn);
-    const uint32_t imageSize = destination.width * destination.height * 4;
-    for (uint32_t uiRow = 0; uiRow < mRow; ++uiRow){
-        for (uint32_t uiColumn = 0; uiColumn < mColumn; ++uiColumn){
-            const uint32_t index = ROW_COLUMN_INDEX(uiRow, uiColumn, mColumn);
-            images.datas[index] = new stbi_uc[imageSize];
-            copy(data, images.datas[index], uiRow, uiColumn, source, destination);
-        }
-    }
-    stbi_image_free(data);
-    if(mRow * mColumn != mImageCount){
-        RecreateImageUniform(device, mRow * mColumn);
-    }
     if(images.size.width != source.width || images.size.height != source.height){
         //修改帧缓冲
-        const uint32_t offset = 10;
-        const VkExtent2D backgroundSize = GetBackgroundSize(source);
-        ReprepareOffscreenFramebuffer(device, glm::vec3(backgroundSize.width, backgroundSize.height, 1));
+        ReprepareOffscreenFramebuffer(device, GetBackgroundSize(source));
     }
-    // vkDeviceWaitIdle(device);
+    ResetImage(device, data, source.width, source.height, graphics, pool);
+
+    stbi_image_free(data);
+
     images.size = source;
-    VulkanSplit::ChangeTextureImage(device, (const void **)images.datas.data(), images.datas.size(), destination.width, destination.height, graphics, pool);
     if(source.width > windowWidth || source.height > windowHeight){
         VkExtent2D backgroundSize;;
         const float zoom = .9f;
@@ -411,8 +476,12 @@ void SplitImage::ChangeTextureImage(VkDevice device, const std::string &image, u
             break;
         }
     }
-    InitImagePos(windowWidth, windowHeight);
+    InitGridImageInfo(windowWidth, windowHeight);
 }
+// void SplitImage::SetSplitType(VkDevice device, const std::string &image, SPLIT_TYPE type, uint32_t windowWidth, uint32_t windowHeight, VkQueue graphics, VkCommandPool pool){
+//     mSplitType = type;
+//     ChangeTextureImage(device, image, windowWidth, windowHeight, graphics, pool);
+// }
 // void Split::FreeTextureImage(void *data){
 //     stbi_image_free(data);
 // }
@@ -426,7 +495,7 @@ void SplitImage::SwapImage(VkDevice device, uint32_t sourceIndex, uint32_t destI
     VkExtent2D source, destination;
     destination.height = images.size.height / mRow;
     destination.width = images.size.width / mColumn;
-    SwapImage(device, images.datas[sourceIndex], destination.width, destination.height, destIndex, graphics, pool);
+    SwapImage(device, images.datas[sourceIndex - 1], destination.width, destination.height, destIndex - 1, graphics, pool);
 }
 
 void SplitImage::SwapImage(VkDevice device, void *datas, uint32_t width, uint32_t height, uint32_t destIndex, VkQueue graphics, VkCommandPool pool){
@@ -437,21 +506,96 @@ void SplitImage::SwapImage(VkDevice device, void *datas, uint32_t width, uint32_
     memcpy(datas, data, imageSize);
     delete[]data;
     VkExtent2D imageExtent = mGrid;
-    VulkanSplit::ChangeTextureImage(device, (const void **)images.datas.data(), images.datas.size(), width, height, graphics, pool);
+    vkDeviceWaitIdle(device);
+    ChangeTextureImage(device, (const void **)images.datas.data(), images.datas.size(), width, height, graphics, pool);
     mGrid = imageExtent;
 }
+void SplitImage::ResetImage(VkDevice device, const void *data, uint32_t width, uint32_t height, VkQueue graphics, VkCommandPool pool){
+    VkExtent2D source, destination;
+    source.width = width;
+    source.height = height;
+    destination.height = height / mRow;
+    destination.width = width / mColumn;
+    VkExtent2D increaseImageSize = destination;
+    if(mIncreaseImageDatas){
+        delete[]mIncreaseImageDatas;
+        mIncreaseImageDatas = nullptr;
+    }
+    for (size_t i = 0; i < images.datas.size(); ++i){
+        delete[]images.datas[i];
+    }
+    /*
+        到现在为止都是默认扩大第一张图片
+        因为inputfloat2"输入完后，仍然会一直执行, 直到点一下其他地方"导致effect.increase.index被改写。将导致很多问题发生s
+        交换方面没处理好
+    */
+    if(effects.increase.column > 1 && effects.increase.row > 1){
+        effects.increase.increase = true;
+        mImageCount = mRow * mColumn - effects.increase.row * effects.increase.column + 1;
+        uint32_t index = 0;
+        //这里还要加偏移
+        increaseImageSize.height = increaseImageSize.height * effects.increase.row + (effects.increase.row - 1) * mOffset;//因为纹理数组的大小是一样的，所以改得再大也会被截断
+        increaseImageSize.width = increaseImageSize.width * effects.increase.column + (effects.increase.column - 1) * mOffset;
+        images.datas.resize(mRow * mColumn - effects.increase.row * effects.increase.column);
+        mIncreaseImageDatas = new stbi_uc[increaseImageSize.width * increaseImageSize.height * 4];
+        if(effects.increase.index == 0){
+            copy(data, mIncreaseImageDatas, 0, 0, source, increaseImageSize);
+        }
+        else{
+            copy(data, mIncreaseImageDatas, effects.increase.index / mRow, effects.increase.index % mColumn, source, increaseImageSize);
+        }
+        const uint32_t imageSize = destination.width * destination.height * 4;
+        for (uint32_t uiRow = 0; uiRow < mRow; ++uiRow){
+            //注意这里选择的图片索引必须是0
+            for (uint32_t uiColumn = uiRow < effects.increase.column?mColumn - effects.increase.column + 1:0; uiColumn < mColumn; ++uiColumn){
+                // printf("uiRow = %d, uiColumn = %d\n", uiRow, uiColumn);
+                images.datas[index] = new stbi_uc[imageSize];
+                copy(data, images.datas[index], uiRow, uiColumn, source, destination);
+                ++index;
+            }
+        }
+    }
+    else{
+        effects.increase.increase = false;
+        mImageCount = mRow * mColumn;
+        images.datas.resize(mRow * mColumn);
+        const uint32_t imageSize = destination.width * destination.height * 4;
+        for (uint32_t uiRow = 0; uiRow < mRow; ++uiRow){
+            for (uint32_t uiColumn = 0; uiColumn < mColumn; ++uiColumn){
+                const uint32_t index = ROW_COLUMN_INDEX(uiRow, uiColumn, mColumn);
+                images.datas[index] = new stbi_uc[imageSize];
+                copy(data, images.datas[index], uiRow, uiColumn, source, destination);
+            }
+        }
+   }
+    if(mRow * mColumn != mImageCount){
+        RecreateImageUniform(device, mImageCount);
+    }
+    if(effects.increase.increase)
+        ChangeIncreaseImage(device, mIncreaseImageDatas, increaseImageSize.width, increaseImageSize.height, graphics, pool);
+    else
+        ChangeIncreaseImage(device, images.datas[0], destination.width, destination.height, graphics, pool);
+    ChangeTextureImage(device, (const void **)images.datas.data(), images.datas.size(), destination.width, destination.height, graphics, pool);
+}
 void SplitImage::UpdateTexture(VkDevice device, uint32_t index, const VkExtent2D &grid){
-    VkExtent2D offscreenGridSize;
-    offscreenGridSize.height = images.size.height / mRow;
-    offscreenGridSize.width = images.size.width / mColumn;
     Uniform ubo;
-    ubo.imageIndex = index;
-    ubo.cartoons.degree = specialEffects.cartoon.degree;
-    ubo.cartoons.cartoons = specialEffects.cartoon.cartoons;
-    ubo.model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(mImagePos[index], 0)), glm::vec3(grid.width, grid.height, 1));
-    // ubo.model = glm::scale(glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(mImagePos[index], 0)), specialEffects.angle[index], glm::vec3(0, 0, 1)), glm::vec3(grid.width, grid.height, 1));
+    // VkExtent2D offscreenGridSize;
+    // bool bUseImageArray = effects.increase.column == 1 && effects.increase.row == 1;
+    ubo.cartoons.degree = effects.cartoon.degree;
+    ubo.cartoons.cartoons = effects.cartoon.cartoons;
+    ubo.imageIndex = effects.increase.increase?index - 1:index;
+    ubo.useImageArray = !effects.increase.increase || index != effects.increase.index;
+    ubo.model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(mGridImage[index].pos, 0)), glm::vec3(grid.width, grid.height, 1));
+    // ubo.model = glm::scale(glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(mImagePos[index], 0)), effects.angle[index], glm::vec3(0, 0, 1)), glm::vec3(grid.width, grid.height, 1));
     VulkanSplit::UpdateTexture(device, index, ubo);
-    ubo.model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(mOffscreenImagePos[index], 0)), glm::vec3(offscreenGridSize.width, offscreenGridSize.height, 1));
-    // ubo.model = glm::scale(glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(mOffscreenImagePos[index], 0)), specialEffects.angle[index], glm::vec3(0, 0, 1)), glm::vec3(offscreenGridSize.width, offscreenGridSize.height, 1));
+
+    // offscreenGridSize.height = images.size.height / mRow;
+    // offscreenGridSize.width = images.size.width / mColumn;
+    // if(effects.increase.increase && index == effects.increase.index){
+    //     offscreenGridSize.height = offscreenGridSize.height * effects.increase.row + (effects.increase.row - 1) *  mOffset;
+    //     offscreenGridSize.width = offscreenGridSize.width * effects.increase.column + (effects.increase.column - 1) *  mOffset;
+    // }
+    ubo.model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(mOffscreenGridImage[index].pos, 0)), glm::vec3(mOffscreenGridImage[index].size.width, mOffscreenGridImage[index].size.height, 1));
+    // ubo.model = glm::scale(glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(mOffscreenImagePos[index], 0)), effects.angle[index], glm::vec3(0, 0, 1)), glm::vec3(offscreenGridSize.width, offscreenGridSize.height, 1));
     UpdateOffscreenTexture(device, index, ubo);
 }

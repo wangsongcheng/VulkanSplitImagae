@@ -9,7 +9,7 @@
 //如果val比alignment小，则返回alignment，否则如果val大于alignment但小于alignment*2则返回alignment*2以此类推
 #define ALIGN(val, alignment)((val + alignment - 1) & ~(alignment - 1))
 #define ROW_COLUMN_INDEX(ROW_INDEX, COLUMN_INDEX, COLUMN)((ROW_INDEX) * (COLUMN) + (COLUMN_INDEX))
-// #define OFFSCREEN_DEBUG
+#define OFFSCREEN_DEBUG
 struct BaseGraphic{
     VulkanBuffer index;
     VulkanBuffer vertex;
@@ -38,6 +38,7 @@ struct Uniform{
     //结构体对齐, 对齐, 对齐
 	CARTOONS cartoons;
     float imageIndex;
+    float useImageArray;
 };
 class VulkanSplit{
     struct{
@@ -77,7 +78,7 @@ class VulkanSplit{
     }offscreenPass;
     BaseGraphic mRect;
     VulkanImage mTexture;
-    // VulkanImage mBackground;
+    VulkanImage mIncrease;
     VkSampler mTextureSampler;
     VkPipelineCache mPipelineCache;
     VkDescriptorSetLayout mSetLayout;
@@ -105,7 +106,7 @@ public:
     }
     void Cleanup(VkDevice device);
     void RecreateImageUniform(VkDevice device, uint32_t imageCount);
-    VkResult ReprepareOffscreenFramebuffer(VkDevice device, const glm::vec3&backgroundSize);
+    VkResult ReprepareOffscreenFramebuffer(VkDevice device, const VkExtent2D&backgroundSize);
     void Setup(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphics, const VulkanPool&pool, uint32_t imageCount);
 
     void Draw(VkCommandBuffer command, uint32_t windowWidth, uint32_t windowHeight, const glm::vec3&backgroundColor);
@@ -125,6 +126,7 @@ public:
 
     void UpdateDescriptorSet(VkDevice device);
 
+    void ChangeIncreaseImage(VkDevice device, const void *datas, uint32_t width, uint32_t height, VkQueue graphics, VkCommandPool pool);
     void ChangeTextureImage(VkDevice device, const void **datas, uint32_t imageCount, uint32_t width, uint32_t height, VkQueue graphics, VkCommandPool pool);
 #ifdef OFFSCREEN_DEBUG
     void DrawDebug(VkCommandBuffer command, uint32_t windowWidth, uint32_t windowHeight);

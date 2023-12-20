@@ -64,7 +64,7 @@ void VulkanSplit::DrawGraphics(VkCommandBuffer command, const BaseGraphic *graph
 }
 void VulkanSplit::SetupDescriptorSetLayout(VkDevice device){
     // Shared pipeline layout for all pipelines used in this sample
-    VkDescriptorSetLayoutBinding setlayoutBindings[2] = {};
+    VkDescriptorSetLayoutBinding setlayoutBindings[3] = {};
     // setlayoutBinding.binding = 0;
     setlayoutBindings[0].descriptorCount = 1;
     setlayoutBindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
@@ -73,7 +73,11 @@ void VulkanSplit::SetupDescriptorSetLayout(VkDevice device){
     setlayoutBindings[1].descriptorCount = 1;
     setlayoutBindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     setlayoutBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    vkf::CreateDescriptorSetLayout(device, 2, setlayoutBindings, &mSetLayout);
+    setlayoutBindings[2].binding = 2;
+    setlayoutBindings[2].descriptorCount = 1;
+    setlayoutBindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    setlayoutBindings[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    vkf::CreateDescriptorSetLayout(device, 3, setlayoutBindings, &mSetLayout);
 }
 // void VulkanSplit::SetupDescriptorSet(VkDevice device, VkDescriptorPool pool){
 //     vkf::tool::AllocateDescriptorSets(device, pool, &mSetLayout, 1, &mSet);
@@ -168,19 +172,24 @@ void VulkanSplit::RecreateImageUniform(VkDevice device, uint32_t imageCount){
     if(uniform.position.buffer != VK_NULL_HANDLE){
         uniform.position.Destroy(device);
     }
+    if(uniform.offscreenPosition.buffer != VK_NULL_HANDLE){
+        uniform.offscreenPosition.Destroy(device);
+    }
     uniform.position.CreateBuffer(device, mMinUniformBufferOffset * imageCount, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     uniform.position.AllocateAndBindMemory(device, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     uniform.position.size = mMinUniformBufferOffset;
+    uniform.offscreenPosition.CreateBuffer(device, mMinUniformBufferOffset * imageCount, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    uniform.offscreenPosition.AllocateAndBindMemory(device, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    uniform.offscreenPosition.size = mMinUniformBufferOffset;
 }
-VkResult VulkanSplit::ReprepareOffscreenFramebuffer(VkDevice device, const glm::vec3&backgroundSize){
+VkResult VulkanSplit::ReprepareOffscreenFramebuffer(VkDevice device, const VkExtent2D&backgroundSize){
     //应该是背景图片大小而不是窗口大小
-    if(offscreenPass.width != backgroundSize.x || offscreenPass.height != backgroundSize.y){
+    if(offscreenPass.width != backgroundSize.width || offscreenPass.height != backgroundSize.height){
         offscreenPass.color.Destroy(device);
-        // vkDestroyRenderPass(device, offscreenPass.renderPass, nullptr);
         vkDestroyFramebuffer(device, offscreenPass.frameBuffer, nullptr);
     }
-    offscreenPass.width = backgroundSize.x;
-    offscreenPass.height = backgroundSize.y;
+    offscreenPass.width = backgroundSize.width;
+    offscreenPass.height = backgroundSize.height;
 
     offscreenPass.color.size.depth = 1;
     offscreenPass.color.size.width = offscreenPass.width;
@@ -242,7 +251,10 @@ void VulkanSplit::Setup(VkPhysicalDevice physicalDevice, VkDevice device, VkQueu
     info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     vkCreateSemaphore(device, &info, nullptr, &offscreenPass.semaphore);
 
-    ReprepareOffscreenFramebuffer(device, glm::vec3(100, 100, 1));
+    VkExtent2D size;
+    size.width = 100;
+    size.height = 100;
+    ReprepareOffscreenFramebuffer(device, size);
 
     UpdateDescriptorSet(device);
     // ResetImageIndex(imageCount);
@@ -398,7 +410,7 @@ void VulkanSplit::UpdateTexture(VkDevice device, uint32_t index, const Uniform&u
 //     UpdateTexture(device, index, ubo);
 // }
 void VulkanSplit::UpdateDescriptorSet(VkDevice device){
-    VkDescriptorSetLayoutBinding setlayoutBindings[2] = {};
+    VkDescriptorSetLayoutBinding setlayoutBindings[3] = {};
     setlayoutBindings[0].descriptorCount = 1;
     setlayoutBindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     setlayoutBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
@@ -406,9 +418,13 @@ void VulkanSplit::UpdateDescriptorSet(VkDevice device){
     setlayoutBindings[1].descriptorCount = 1;
     setlayoutBindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     setlayoutBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    setlayoutBindings[2].binding = 2;
+    setlayoutBindings[2].descriptorCount = 1;
+    setlayoutBindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    setlayoutBindings[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     vkf::tool::UpdateDescriptorSets(device, 1, setlayoutBindings, { uniform.background }, {}, descriptorset.background);
     if(mTexture.image != VK_NULL_HANDLE){
-        vkf::tool::UpdateDescriptorSets(device, 2, setlayoutBindings, { uniform.position }, { mTexture }, descriptorset.set, mTextureSampler);
+        vkf::tool::UpdateDescriptorSets(device, 3, setlayoutBindings, { uniform.position }, { mIncrease, mTexture }, descriptorset.set, mTextureSampler);
     }
     setlayoutBindings[0].descriptorCount = 1;
     setlayoutBindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
@@ -417,20 +433,28 @@ void VulkanSplit::UpdateDescriptorSet(VkDevice device){
     setlayoutBindings[1].descriptorCount = 1;
     setlayoutBindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     setlayoutBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    setlayoutBindings[2].binding = 2;
+    setlayoutBindings[2].descriptorCount = 1;
+    setlayoutBindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    setlayoutBindings[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     vkf::tool::UpdateDescriptorSets(device, 1, setlayoutBindings, { uniform.offscreenBackground }, {}, descriptorset.offscreenBackground);
 #ifdef OFFSCREEN_DEBUG
     vkf::tool::UpdateDescriptorSets(device, 2, setlayoutBindings, { uniform.debug }, { offscreenPass.color }, descriptorset.debug, mTextureSampler);
 #endif
     if(mTexture.image != VK_NULL_HANDLE){
-        vkf::tool::UpdateDescriptorSets(device, 2, setlayoutBindings, { uniform.offscreenPosition }, { mTexture }, descriptorset.offscreenPosition, mTextureSampler);
+        vkf::tool::UpdateDescriptorSets(device, 3, setlayoutBindings, { uniform.offscreenPosition }, { mIncrease, mTexture }, descriptorset.offscreenPosition, mTextureSampler);
     }
 }
+void VulkanSplit::ChangeIncreaseImage(VkDevice device, const void *datas, uint32_t width, uint32_t height, VkQueue graphics, VkCommandPool pool){
+    if(mIncrease.image != VK_NULL_HANDLE){
+        mIncrease.Destroy(device);
+    }
+    vkf::CreateTextureImage(device, datas, width, height, mIncrease, pool, graphics);
+}
 void VulkanSplit::ChangeTextureImage(VkDevice device, const void **datas, uint32_t imageCount, uint32_t width, uint32_t height, VkQueue graphics, VkCommandPool pool){
-    vkDeviceWaitIdle(device);
     if(mTexture.image != VK_NULL_HANDLE){
         mTexture.Destroy(device);
     }
-    mImageCount = imageCount;
     vkf::CreateImageArray(device, datas, imageCount, width, height, mTexture, pool, graphics);
 }
 

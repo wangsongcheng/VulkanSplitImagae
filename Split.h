@@ -1,9 +1,14 @@
 #ifndef SPLIT_INCLUDE_H
 #define SPLIT_INCLUDE_H
 #include "VulkanSplit.h"
-enum SPLIT_TYPE{
-    JIGSAW = 0,
-    JIU_GONG_GE
+// enum SPLIT_TYPE{
+//     SPLIT_TYPE_JIGSAW = 0,
+//     SPLIT_TYPE_JIU_GONG_GE,
+//     SPLIT_TYPE_UNKNOW = 0xffffffffff
+// };
+struct GRID_IMAGE_INFO{
+    glm::vec2 pos;
+    VkExtent2D size;
 };
 class SplitImage:public VulkanSplit{
     struct{
@@ -21,27 +26,44 @@ class SplitImage:public VulkanSplit{
             float cartoons;
             glm::vec3  degree = glm::vec3(.5, .5, .5);
         }cartoon;
+        struct{
+            uint32_t row;//所占的行数, 列相同
+            bool increase;
+            uint32_t index;
+            uint32_t column;
+        }increase;
         //需求是图片内容旋转而不是整个正方形旋转
         // std::vector<float>angle;
-    }specialEffects;
+    }effects;
+    // //如果不是JIU_GONG_GE忽略
+    // struct{
+    //     //第一张所占的行列
+    //     uint32_t row;
+    //     uint32_t column;
+    // }firstImage;
     VkExtent2D mGrid;
     uint32_t mRow, mColumn;
-    SPLIT_TYPE mSplitType = JIU_GONG_GE;
-    std::vector<glm::vec2>mImagePos;
-    std::vector<glm::vec2>mOffscreenImagePos;
-    void InitImagePos(uint32_t windowWidth, uint32_t windowHeight);
+    const uint32_t mOffset = 10;
+    unsigned char *mIncreaseImageDatas;
+    std::vector<GRID_IMAGE_INFO>mGridImage;
+    std::vector<GRID_IMAGE_INFO>mOffscreenGridImage;
+    // SPLIT_TYPE mSplitType = SPLIT_TYPE_JIU_GONG_GE;
+    void InitGridImageInfo(uint32_t windowWidth, uint32_t windowHeight);
     void InitBackgroundPos(uint32_t windowWidth, uint32_t windowHeight);
-    void InitJigsawPos(const glm::vec3&backgroundPos, const VkExtent2D&backgroundSize);
-    void InitJiuGongGePos(const glm::vec3&backgroundPos, const VkExtent2D&backgroundSize);
+    
+    // void InitJigsawPos(const glm::vec3&backgroundPos, const VkExtent2D&backgroundSize);
+    // void InitJiuGongGePos(const glm::vec3&backgroundPos, const VkExtent2D&backgroundSize);
 public:
     SplitImage(/* args */);
     ~SplitImage();
     inline VkExtent2D GetBackgroundSize(const VkExtent2D&imageSize){
         VkExtent2D size;
-        const uint32_t offset = 10;
-        size.height = (mRow + 1) * offset + imageSize.height;
-        size.width = (mColumn + 1) * offset + imageSize.width;
+        size.height = (mRow + 1) * mOffset + imageSize.height;
+        size.width = (mColumn + 1) * mOffset + imageSize.width;
         return size;
+    }
+    inline uint32_t GetOffset(){
+        return mOffset;
     }
     inline uint32_t GetRow(){
         return mRow;
@@ -49,14 +71,23 @@ public:
     inline uint32_t GetColumn(){
         return mColumn;
     }
+    inline uint32_t GetIncreaseIndex(){
+        return effects.increase.index;
+    }
+    inline uint32_t GetIncreaseRow(){
+        return effects.increase.row;
+    }
+    inline uint32_t GetIncreaseColumn(){
+        return effects.increase.column;
+    }
     // inline float GetAngle(uint32_t index){
-    //     return specialEffects.angle[index];
+    //     return effects.angle[index];
     // }
     inline float GetCartoons(){
-        return specialEffects.cartoon.cartoons;
+        return effects.cartoon.cartoons;
     }
     inline glm::vec3 GetDegree(){
-        return specialEffects.cartoon.degree;
+        return effects.cartoon.degree;
     }
     inline void SetRow(uint32_t row){
         mRow = row;
@@ -64,15 +95,21 @@ public:
     inline void SetColumn(uint32_t column){
         mColumn = column;
     }
+    // inline void SetFirstRow(uint32_t row){
+    //     if(mSplitType != SPLIT_TYPE_JIGSAW || row < mRow - 1)effects.increase.row = row;
+    // }
+    // inline void SetFirstColumn(uint32_t column){
+    //     if(mSplitType != SPLIT_TYPE_JIGSAW || column < mColumn - 1)effects.increase.column = column;
+    // }
     inline void ChangeBackgroundColor(const glm::vec3&color){
         background.color = color;
     }
     inline glm::vec2 GetImagePos(uint32_t index){
-        return mImagePos[index];
+        return mGridImage[index].pos;
     }
-    inline void SetSplitType(SPLIT_TYPE type){
-        mSplitType = type;
-    }
+    // inline SPLIT_TYPE GetSplitType(){
+    //     return mSplitType;
+    // }
     inline VkExtent2D GetGridSize(){
         return mGrid;
     }
@@ -80,13 +117,19 @@ public:
         return !images.datas.empty();
     }
     inline void SetDegree(const glm::vec3&degree){
-        specialEffects.cartoon.degree = degree;
+        effects.cartoon.degree = degree;
     }
     inline void SetCartoons(float cartoons){
-        specialEffects.cartoon.cartoons = cartoons;
+        effects.cartoon.cartoons = cartoons;
+    }
+    inline void IncreaseImage(uint32_t index, uint32_t row, uint32_t column){
+        if(index >= mRow * mColumn || row == 0 || column == 0 || row >= mRow || column >= mColumn)return;
+        effects.increase.row = row;
+        effects.increase.index = index;
+        effects.increase.column = column;
     }
     // inline void SetAngle(uint32_t index, float angle){
-    //     specialEffects.angle[index] = angle;
+    //     effects.angle[index] = angle;
     // }
     // inline void ResetImageIndex(){
     //     VulkanSplit::ResetImageIndex(mRow * mColumn);
@@ -108,13 +151,16 @@ public:
     // void CreateTextureImage(VkDevice device, uint32_t width, uint32_t height, VkQueue graphics, VkCommandPool pool);
     // void *LoadTextureImage(VkDevice device, const std::string&image, VkExtent2D&size, VkQueue graphics, VkCommandPool pool);
     // void SplitTextureImage(VkDevice device, const void *data, const VkExtent2D&size, VkQueue graphics, VkCommandPool pool);
-    void InertTextureImage(VkDevice device, const std::string&image, uint32_t index, VkQueue graphics, VkCommandPool pool);
-    void ChangeTextureImage(VkDevice device, const std::string &image, uint32_t windowWidth, uint32_t windowHeight, VkQueue graphics, VkCommandPool pool);
+    // void InertTextureImage(VkDevice device, const std::string&image, uint32_t index, VkQueue graphics, VkCommandPool pool);
+    void ChangeImage(VkDevice device, const std::string &image, uint32_t windowWidth, uint32_t windowHeight, VkQueue graphics, VkCommandPool pool);
+    // void SetSplitType(VkDevice device, const std::string &image, SPLIT_TYPE type, uint32_t windowWidth, uint32_t windowHeight, VkQueue graphics, VkCommandPool pool);
 
     // void FreeTextureImage(void *data);
     // void SwapImage(uint32_t sourceIndex, uint32_t destIndex);
-    bool mousecursor(double xpos, double ypos, int32_t&index);
+    bool MouseCursor(double xpos, double ypos, int32_t&index);
     void SwapImage(VkDevice device, uint32_t sourceIndex, uint32_t destIndex, VkQueue graphics, VkCommandPool pool);
+    //重置图片, 调用前请先读出图片数据
+    void ResetImage(VkDevice device, const void *data, uint32_t width, uint32_t height, VkQueue graphics, VkCommandPool pool);
     void SwapImage(VkDevice device, void *datsa, uint32_t width, uint32_t height, uint32_t destIndex, VkQueue graphics, VkCommandPool pool);
 };
 #endif
