@@ -579,7 +579,8 @@ void updateImguiWidget(){
                 //输入完后，仍然会一直执行, 直到点一下其他地方
                 if(g_SelectImage != -1){
                     g_Split.IncreaseImage(g_SelectImage, increaseRowAndColumn);
-                    g_ImageOperate.update = true;
+                    OpenImage(g_ImageName);
+                    //g_ImageOperate.update = true;
                 }
                 else{
                     increaseRowAndColumn = 1;
@@ -589,7 +590,8 @@ void updateImguiWidget(){
                 if(rowAndcolumn[0] != 0 && rowAndcolumn[1] != 0){
                     g_Split.SetRow(rowAndcolumn[0]);
                     g_Split.SetColumn(rowAndcolumn[1]);
-                    g_ImageOperate.update = true;
+                    OpenImage(g_ImageName);
+                    //g_ImageOperate.update = true;
                 }
                 else{
                     rowAndcolumn[0] = 1;

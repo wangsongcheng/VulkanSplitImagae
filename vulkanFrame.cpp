@@ -506,11 +506,12 @@ VkResult vkf::CreatePipelineCache(VkDevice device, const std::string&cacheFile, 
     return VK_ERROR_UNKNOWN;
 }
 void vkf::DestroyPipelineCache(VkDevice device, const std::string&cacheFile, VkPipelineCache &cache){
+    if (cache == VK_NULL_HANDLE)return;
     if(cacheFile != ""){
-        size_t cacheDataSize;
+        size_t cacheDataSize = 0;
         std::vector<uint32_t>cacheData;
         vkGetPipelineCacheData(device, cache, &cacheDataSize, nullptr);
-        cacheData.resize(cacheDataSize / sizeof(char));
+        cacheData.resize(cacheDataSize / sizeof(uint32_t));
         vkGetPipelineCacheData(device, cache, &cacheDataSize, cacheData.data());
         vkf::tool::WriteFileContent(cacheFile, cacheData.data(), cacheData.size() * sizeof(uint32_t));
     }

@@ -433,7 +433,7 @@ void SplitImage::ChangeImage(VkDevice device, const std::string &image, uint32_t
     mSourceImageData = new stbi_uc[source.width * source.height * 4];
     memcpy(mSourceImageData, data, sizeof(stbi_uc) * source.width * source.height * 4);
 
-    if(images.size.width != source.width || images.size.height != source.height){
+    if(images.size.width != source.width || images.size.height != source.height || mRow * mColumn != mImageCount){
         //修改帧缓冲
         ReprepareOffscreenFramebuffer(device, GetBackgroundSize(source));
     }
