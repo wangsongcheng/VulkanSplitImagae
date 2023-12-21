@@ -428,10 +428,10 @@ void DeselectedImage(uint32_t imageIndex){
     // g_SelectImage[imageIndex] = -1;
     VkExtent2D grid = g_Split.GetGridSize();
     const uint32_t offset = g_Split.GetOffset();
-    const uint32_t increaseRow = g_Split.GetIncreaseRow(), increaseColumn = g_Split.GetIncreaseColumn();
-    if(increaseRow > 1 && increaseColumn > 1 && imageIndex == g_Split.GetIncreaseIndex()){
-        grid.height = grid.height * increaseRow + (increaseRow - 1) * offset;
-        grid.width = grid.width * increaseColumn + (increaseColumn - 1) * offset;
+    const uint32_t increaseRowAColumn = g_Split.GetIncreaseRowAndColumn();
+    if(increaseRowAColumn > 1 && imageIndex == g_Split.GetIncreaseIndex()){
+        grid.height = grid.height * increaseRowAColumn + (increaseRowAColumn - 1) * offset;
+        grid.width = grid.width * increaseRowAColumn + (increaseRowAColumn - 1) * offset;
     }
     g_Split.UpdateTexture(g_VulkanDevice.device, imageIndex, grid);
 }
@@ -451,10 +451,10 @@ void SwapImage(uint32_t sourceIndex, uint32_t destIndex){
 void SelectedImage(uint32_t imageIndex){
     VkExtent2D grid = g_Split.GetGridSize();
     const uint32_t offset = g_Split.GetOffset();
-    const uint32_t increaseRow = g_Split.GetIncreaseRow(), increaseColumn = g_Split.GetIncreaseColumn();
-    if(increaseRow > 1 && increaseColumn > 1 && imageIndex == g_Split.GetIncreaseIndex()){
-        grid.height = grid.height * increaseRow + (increaseRow - 1) * offset;
-        grid.width = grid.width * increaseColumn + (increaseColumn - 1) * offset;
+    const uint32_t increaseRowAColumn = g_Split.GetIncreaseRowAndColumn();
+    if(increaseRowAColumn > 1 && imageIndex == g_Split.GetIncreaseIndex()){
+        grid.height = grid.height * increaseRowAColumn + (increaseRowAColumn - 1) * offset;
+        grid.width = grid.width * increaseRowAColumn + (increaseRowAColumn - 1) * offset;
     }
     grid.width *= 1.05f;
     grid.height *= 1.05f;
@@ -487,8 +487,8 @@ void updateImguiWidget(){
     // static bool checkbuttonstatu;//检查框的状态。这个值传给imgui会影响到检查框
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
+    static int32_t increaseRowAndColumn = g_Split.GetIncreaseRowAndColumn();
     static int32_t rowAndcolumn[2] = { (int32_t)g_Split.GetRow(), (int32_t)g_Split.GetColumn() };
-    static int32_t increaseRowAndColumn[2] = { (int32_t)g_Split.GetIncreaseRow(), (int32_t)g_Split.GetIncreaseColumn() };
     static std::string messageboxTitle = "提示", messageboxMessage;
     if(ImGui::BeginMainMenuBar()){
         if(ImGui::BeginMenu("文件")){
@@ -604,14 +604,7 @@ void updateImguiWidget(){
         g_ImguiInfo.size = ImGui::GetWindowSize();
         //最多放大一张图片
         if(g_Split.IsLoadTexture()){
-            if(ImGui::InputInt2("行列", rowAndcolumn)){
-                if(rowAndcolumn[0] != 0 && rowAndcolumn[1] != 0){
-                    g_Split.SetRow(rowAndcolumn[0]);
-                    g_Split.SetColumn(rowAndcolumn[1]);
-                    if(g_Split.IsLoadTexture())OpenImage(g_ImageName);
-                }
-            }
-            if(ImGui::InputInt2("选中图片行列", increaseRowAndColumn)){
+            if(ImGui::InputInt("扩大图片", &increaseRowAndColumn)){
                 //输入完后，仍然会一直执行, 直到点一下其他地方
                 if(g_SelectImage != -1){
                     // uint32_t index = g_Split.GetIncreaseIndex();
@@ -619,18 +612,30 @@ void updateImguiWidget(){
                     //     increaseRowAndColumn[0] = 1;                    
                     //     increaseRowAndColumn[1] = 1;
                     // }
-                    g_Split.IncreaseImage(g_SelectImage, increaseRowAndColumn[0], increaseRowAndColumn[1]);
-                    if(g_Split.IsLoadTexture() && increaseRowAndColumn[0] > 1 && increaseRowAndColumn[1] > 1){
+                    g_Split.IncreaseImage(g_SelectImage, increaseRowAndColumn);
+                    if(g_Split.IsLoadTexture()){
+                    // if(g_Split.IsLoadTexture() && increaseRowAndColumn[0] > 1 && increaseRowAndColumn[1] > 1){
                         OpenImage(g_ImageName);
                     }
                 }
+                // else{
+                //     increaseRowAndColumn[0] = 1;                    
+                //     increaseRowAndColumn[1] = 1;
+                // }
+            }
+            if(ImGui::InputInt2("图片行列", rowAndcolumn)){
+                if(rowAndcolumn[0] != 0 && rowAndcolumn[1] != 0){
+                    g_Split.SetRow(rowAndcolumn[0]);
+                    g_Split.SetColumn(rowAndcolumn[1]);
+                    if(g_Split.IsLoadTexture())OpenImage(g_ImageName);
+                }
                 else{
-                    increaseRowAndColumn[0] = 1;                    
-                    increaseRowAndColumn[1] = 1;
+                    rowAndcolumn[0] = 1;
+                    rowAndcolumn[1] = 1;
                 }
             }
         }
-        if(ImGui::ColorEdit3("背景色", backgroundColor)){
+        if(ImGui::ColorEdit3("背景颜色", backgroundColor)){
             g_Split.ChangeBackgroundColor(glm::vec3(backgroundColor[0], backgroundColor[1], backgroundColor[2]));
             g_Split.UpdateBackground(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
         }
@@ -647,6 +652,10 @@ void updateImguiWidget(){
                 g_Split.SetDegree(glm::vec3(degree[0], degree[1], degree[2]));
                 g_Split.UpdateImage(g_VulkanDevice.device);
             }
+        }
+        if(ImGui::Button("注意事项")){
+            messageboxMessage = "扩图:扩大的行列必须一样\n交换:扩大后的图片无法和小图交换";
+            g_ShowMessageBox = true;
         }
         // for (size_t i = 0; i < g_SelectImage.size(); ++i){
         //     if(g_SelectImage[i] != -1){
