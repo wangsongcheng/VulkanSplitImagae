@@ -17,7 +17,7 @@ void copy(const void *source, void *destination, uint32_t row, uint32_t column, 
         memcpy((stbi_uc *)destination + dataOffset * uiLineSize, (stbi_uc *)source + imageOffsetStart + dataOffset * uiSourceLineSize, uiLineSize);
     }
 }
-void SplitImage::UpdateImage(VkDevice device){
+void SplitImage::UpdateImageUniform(VkDevice device){
     if(effects.increase.increase){
         VkExtent2D imageSize = mGrid;
         for (uint32_t index = 0; index < mImageCount; ++index){
@@ -33,9 +33,12 @@ void SplitImage::UpdateImage(VkDevice device){
         }
     }
 }
-void SplitImage::InitGridImageInfo(uint32_t windowWidth, uint32_t windowHeight){
+void SplitImage::UpdateImage(VkDevice device, VkQueue graphics, VkCommandPool pool){
+    ChangeImage(device, mSourceImageData, images.size.width, images.size.height, graphics, pool);
+    InitGridImageInfo();
+}
+void SplitImage::InitGridImageInfo(){
     uint32_t index = 0;
-    InitBackgroundPos(windowWidth, windowHeight);
     mOffscreenGrid.height = images.size.height / mRow;
     mOffscreenGrid.width = images.size.width / mColumn;
     mIncreaseGrid.height = mGrid.height * effects.increase.rowAndcolumn + (effects.increase.rowAndcolumn - 1) * mOffset;
@@ -118,6 +121,7 @@ SplitImage::~SplitImage(){
 
 void SplitImage::Cleanup(VkDevice device){
     VulkanSplit::Cleanup(device);
+    delete[]mSourceImageData;
     delete[]mIncreaseImageDatas;
     for (size_t i = 0; i < images.datas.size(); ++i){
         delete[]images.datas[i];
@@ -422,6 +426,13 @@ void SplitImage::ChangeImage(VkDevice device, const std::string &image, uint32_t
         printf("load picture error:%s\n", image.c_str());
         return;
     }
+
+    if(mSourceImageData){
+        delete[]mSourceImageData;
+    }
+    mSourceImageData = new stbi_uc[source.width * source.height * 4];
+    memcpy(mSourceImageData, data, sizeof(stbi_uc) * source.width * source.height * 4);
+
     if(images.size.width != source.width || images.size.height != source.height){
         //修改帧缓冲
         ReprepareOffscreenFramebuffer(device, GetBackgroundSize(source));
@@ -451,7 +462,20 @@ void SplitImage::ChangeImage(VkDevice device, const std::string &image, uint32_t
             break;
         }
     }
-    InitGridImageInfo(windowWidth, windowHeight);
+    InitBackgroundPos(windowWidth, windowHeight);
+    InitGridImageInfo();
+}
+void SplitImage::ResetImage(VkDevice device, VkQueue graphics, VkCommandPool pool){
+    uint32_t imageCount = ResetImage(device, mSourceImageData, images.size.width, images.size.height, effects.increase.increase);
+    if(mRow * mColumn != mImageCount){
+        RecreateImageUniform(device, imageCount);
+    }
+    if(effects.increase.increase)
+        ChangeIncreaseImage(device, mIncreaseImageDatas, mIncreaseGrid.width, mIncreaseGrid.height, graphics, pool);
+    else
+        ChangeIncreaseImage(device, images.datas[0], mGrid.width, mGrid.height, graphics, pool);
+    ChangeTextureImage(device, (const void **)images.datas.data(), images.datas.size(), mGrid.width, mGrid.height, graphics, pool);
+    mImageCount = imageCount;
 }
 void SplitImage::ChangeImage(VkDevice device, const void *data, uint32_t width, uint32_t height, VkQueue graphics, VkCommandPool pool){
     VkExtent2D source, destination;
