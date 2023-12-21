@@ -435,19 +435,20 @@ void DeselectedImage(uint32_t imageIndex){
     }
     g_Split.UpdateTexture(g_VulkanDevice.device, imageIndex, grid);
 }
-void SwapImage(uint32_t sourceIndex, uint32_t destIndex){
-    g_SelectImage = -1;
-    const uint32_t index = g_Split.GetIncreaseIndex();
-    if(sourceIndex == index || destIndex == index){
-        DeselectedImage(destIndex);
-        DeselectedImage(sourceIndex);
-        return;
-    }
-    g_Split.SwapImage(g_VulkanDevice.device, sourceIndex, destIndex, g_VulkanQueue.graphics, g_VulkanPool.commandPool);
-    // g_Split.UpdateBackground(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
-    g_Split.UpdateImage(g_VulkanDevice.device);
-    g_Split.UpdateDescriptorSet(g_VulkanDevice.device);
-}
+//交换图片后，合并结果不匹配
+// void SwapImage(uint32_t sourceIndex, uint32_t destIndex){
+//     g_SelectImage = -1;
+//     const uint32_t index = g_Split.GetIncreaseIndex();
+//     if(sourceIndex == index || destIndex == index){
+//         DeselectedImage(destIndex);
+//         DeselectedImage(sourceIndex);
+//         return;
+//     }
+//     g_Split.SwapImage(g_VulkanDevice.device, sourceIndex, destIndex, g_VulkanQueue.graphics, g_VulkanPool.commandPool);
+//     // g_Split.UpdateBackground(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
+//     g_Split.UpdateImage(g_VulkanDevice.device);
+//     g_Split.UpdateDescriptorSet(g_VulkanDevice.device);
+// }
 void SelectedImage(uint32_t imageIndex){
     VkExtent2D grid = g_Split.GetGridSize();
     const uint32_t offset = g_Split.GetOffset();
@@ -906,10 +907,10 @@ void mousebutton(GLFWwindow *window, int button, int action, int mods) {
                 if(g_SelectImage == index){
                     DeselectedImage(g_SelectImage);
                 }
-                else{
-                    SwapImage(g_SelectImage, index);
-                    g_SelectImage = -1;
-                }
+                // else{
+                //     SwapImage(g_SelectImage, index);
+                //     g_SelectImage = -1;
+                // }
             }
         }
     }

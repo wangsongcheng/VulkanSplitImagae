@@ -32,33 +32,6 @@ void SplitImage::UpdateImage(VkDevice device){
             UpdateTexture(device, index, mGrid);
         }
     }
-    // for (uint32_t index = 0; index < mImageCount; ++index){
-    //     UpdateTexture(device, index, mGrid);
-    // }
-    // if(mSplitType == SPLIT_TYPE_JIU_GONG_GE){
-    //     for (uint32_t uiRow = 0; uiRow < mRow; ++uiRow){
-    //         for (uint32_t uiColumn = 0; uiColumn < mColumn; ++uiColumn){
-    //             index = ROW_COLUMN_INDEX(uiRow, uiColumn, mColumn);
-    //             if(mImagePos[index] != glm::vec2(0)){
-    //                 UpdateTexture(device, index, mGrid);
-    //             }
-    //         }
-    //     }
-    // }
-    // else if(mSplitType == SPLIT_TYPE_JIGSAW){
-    //     //因为纹理数组图片大小必须一样, 或许可以改用只放大第一张图片的方式完成
-    //     //而且第一张图片切割的大小要改变
-    //     VkExtent2D firstImageSize = mGrid;
-    //     firstImageSize.height *= firstImage.row;
-    //     firstImageSize.width *= firstImage.column;
-    //     UpdateTexture(device, 0, firstImageSize);
-    //     for (uint32_t uiRow = 0; uiRow < mRow; ++uiRow){
-    //         for (uint32_t uiColumn = uiRow < firstImage.column?mColumn - firstImage.column + 1:0; uiColumn < mColumn; ++uiColumn){
-    //             ++index;
-    //             UpdateTexture(device, index, mGrid);
-    //         }
-    //     }
-    // }
 }
 void SplitImage::InitGridImageInfo(uint32_t windowWidth, uint32_t windowHeight){
     uint32_t index = 0;
@@ -399,15 +372,35 @@ void SplitImage::Setup(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue
 
 bool SplitImage::MouseCursor(double xpos, double ypos, int32_t &index){
     if(effects.increase.increase){
-        if(xpos > mIncreaseGridPos.x && ypos > mIncreaseGridPos.y && xpos < mIncreaseGridPos.x + mIncreaseGrid.width && ypos < mIncreaseGridPos.y + mIncreaseGrid.height){
-            index = effects.increase.index;
-            return true;
+        VkExtent2D size;
+        uint32_t val = 0;
+        // std::vector<GRID_IMAGE_INFO>pos(mGridImage.size() + 1);
+        glm::vec2 pos;
+        for (size_t i = 0; i < mGridImage.size() + 1; i++){
+            if(i != effects.increase.index){
+                size = mGrid;
+                pos = mGridImage[val++].pos;
+            }
+            else{
+                size = mIncreaseGrid;
+                pos = mIncreaseGridPos;
+            }
+            if(xpos > pos.x && ypos > pos.y && xpos < pos.x + size.width && ypos < pos.y + size.height){
+                index = i;
+                return true;
+            }
         }
+        // if(xpos > mIncreaseGridPos.x && ypos > mIncreaseGridPos.y && xpos < mIncreaseGridPos.x + mIncreaseGrid.width && ypos < mIncreaseGridPos.y + mIncreaseGrid.height){
+        //     index = effects.increase.index;
+        //     return true;
+        // }
     }
-    for (size_t i = 0; i < mGridImage.size(); ++i){
-        if(xpos > mGridImage[i].pos.x && ypos > mGridImage[i].pos.y && xpos < mGridImage[i].pos.x + mGrid.width && ypos < mGridImage[i].pos.y + mGrid.height){
-            index = i;
-            return true;
+    else{
+        for (size_t i = 0; i < mGridImage.size(); ++i){
+            if(xpos > mGridImage[i].pos.x && ypos > mGridImage[i].pos.y && xpos < mGridImage[i].pos.x + mGrid.width && ypos < mGridImage[i].pos.y + mGrid.height){
+                index = i;
+                return true;
+            }
         }
     }
     return false;
@@ -497,8 +490,8 @@ void SplitImage::SwapImage(VkDevice device, uint32_t sourceIndex, uint32_t desti
     VkExtent2D source, destination;
     destination.height = images.size.height / mRow;
     destination.width = images.size.width / mColumn;
-    const uint32_t srcIdex = sourceIndex > effects.increase.index?sourceIndex - 1:sourceIndex, desIndex = destionIndex > effects.increase.index?destionIndex - 1:destionIndex;
-    SwapImage(device, images.datas[srcIdex], destination.width, destination.height, desIndex, graphics, pool);
+    // const uint32_t srcIdex = sourceIndex > effects.increase.index?sourceIndex - 1:sourceIndex, desIndex = destionIndex > effects.increase.index?destionIndex - 1:destionIndex;
+    SwapImage(device, images.datas[sourceIndex - 1], destination.width, destination.height, destionIndex - 1, graphics, pool);
 }
 
 void SplitImage::SwapImage(VkDevice device, void *datas, uint32_t width, uint32_t height, uint32_t destIndex, VkQueue graphics, VkCommandPool pool){
@@ -526,10 +519,6 @@ uint32_t SplitImage::ResetImage(VkDevice device, const void *data, uint32_t widt
     for (size_t i = 0; i < images.datas.size(); ++i){
         delete[]images.datas[i];
     }
-    /*
-        到现在为止都是默认扩大第一张图片
-        交换方面没处理好
-    */
     uint32_t imageCount;
     if(increase){
         images.datas.resize(mRow * mColumn - effects.increase.rowAndcolumn * effects.increase.rowAndcolumn);
