@@ -44,16 +44,17 @@ class SplitImage:public VulkanSplit{
     // }firstImage;
     uint32_t mRow, mColumn;
     const uint32_t mOffset = 10;
+    unsigned char *mSourceImageData;
     unsigned char *mIncreaseImageDatas;
     std::vector<GRID_IMAGE_INFO>mGridImage;
     std::vector<GRID_IMAGE_INFO>mOffscreenGridImage;
     glm::vec2 mIncreaseGridPos, mOffscreenIncreaseGridPos;
     VkExtent2D mGrid, mIncreaseGrid, mOffscreenGrid, mOffscreenIncreaseGrid;
     // SPLIT_TYPE mSplitType = SPLIT_TYPE_JIU_GONG_GE;
-    void InitGridImageInfo(uint32_t windowWidth, uint32_t windowHeight);
+    void InitGridImageInfo();
     void InitBackgroundPos(uint32_t windowWidth, uint32_t windowHeight);
-    //重置图片, 调用前请先读出图片数据
     uint32_t ResetImage(VkDevice device, const void *data, uint32_t width, uint32_t height, bool increase);
+    //重置图片, 调用前请先读出图片数据
     // void InitJigsawPos(const glm::vec3&backgroundPos, const VkExtent2D&backgroundSize);
     // void InitJiuGongGePos(const glm::vec3&backgroundPos, const VkExtent2D&backgroundSize);
 public:
@@ -145,7 +146,8 @@ public:
     // }
     void Cleanup(VkDevice device);
 
-    void UpdateImage(VkDevice device);
+    void UpdateImageUniform(VkDevice device);
+    void UpdateImage(VkDevice device, VkQueue graphics, VkCommandPool pool);
     
     void WriteImageToFolder(const std::string&file);
     void WriteImageToFile(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphics, VkCommandPool pool, const std::string&file);
@@ -161,6 +163,8 @@ public:
     //调用前请先读出图片数据
     void ChangeImage(VkDevice device, const void *data, uint32_t width, uint32_t height, VkQueue graphics, VkCommandPool pool);
     void ChangeImage(VkDevice device, const std::string &image, uint32_t windowWidth, uint32_t windowHeight, VkQueue graphics, VkCommandPool pool);
+    
+    void ResetImage(VkDevice device, VkQueue graphics, VkCommandPool pool);
     // void SetSplitType(VkDevice device, const std::string &image, SPLIT_TYPE type, uint32_t windowWidth, uint32_t windowHeight, VkQueue graphics, VkCommandPool pool);
 
     // void FreeTextureImage(void *data);

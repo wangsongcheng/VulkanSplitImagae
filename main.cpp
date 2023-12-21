@@ -41,8 +41,9 @@ void (*g_OpenFileFunCall)(const std::string&file);
 std::vector<const char *>g_FileTypeItem;
 
 struct{
-    // bool swap;
+    bool reset;
     bool change;
+    bool update;
     bool complete;
     bool screenhot;
     // SPLIT_TYPE splitType = SPLIT_TYPE_UNKNOW;
@@ -469,11 +470,12 @@ void SelectedImage(uint32_t imageIndex){
 //         g_SelectImage[i] = i;
 //     }
 // }
-// void DeselectedAll(){
-//     g_SelectImage.clear();
-//     // g_Split.UpdateBackground(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
-//     g_Split.UpdateImage(g_VulkanDevice.device);
-// }
+void DeselectedAll(){
+    g_SelectImage = -1;
+    // g_SelectImage.clear();
+    // g_Split.UpdateBackground(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
+    g_Split.UpdateImageUniform(g_VulkanDevice.device);
+}
 // void ReverseSelectAll(){
 //     const std::vector<int32_t>index = g_SelectImage;
 //     SelectAll();
@@ -555,45 +557,13 @@ void updateImguiWidget(){
             // }
             ImGui::EndMenu();
         }
-        if(ImGui::BeginMenu("编辑")){
-            if(ImGui::MenuItem("重置")){
-                OpenImage(g_ImageName);
-            }
-            if(ImGui::MenuItem("导入")){
-                //导入的肯定是小图。因为要导入大图的话，应该从文件->打开那里导入
-            }
-            ImGui::EndMenu();
-        }
-        // if(ImGui::BeginMenu("选择")){
-        //     if(ImGui::MenuItem("拼图")){
-        //         if(g_Split.IsLoadTexture()){
-        //             g_WindowName = "拼图";
-        //             g_ImageOperate.splitType = SPLIT_TYPE_JIGSAW;
-        //             rowAndcolumn[0] = 4;
-        //             rowAndcolumn[1] = 3;
-        //             g_Split.SetRow(rowAndcolumn[0]);
-        //             g_Split.SetColumn(rowAndcolumn[1]);
-        //             OpenImage(g_ImageName);
-        //         }
-        //         else{
-        //             g_ShowMessageBox = true;
-        //             messageboxMessage = "请先添加图片后再试";
-        //         }
-        //     }
-        //     if(ImGui::MenuItem("九宫格")){
-        //         if(g_Split.IsLoadTexture()){
-        //             g_WindowName = "九宫格";
-        //             g_ImageOperate.splitType = SPLIT_TYPE_JIU_GONG_GE;
-        //             rowAndcolumn[0] = 3;
-        //             rowAndcolumn[1] = 3;
-        //             g_Split.SetRow(rowAndcolumn[0]);
-        //             g_Split.SetColumn(rowAndcolumn[1]);
-        //             OpenImage(g_ImageName);
-        //         }
-        //         else{
-        //             g_ShowMessageBox = true;
-        //             messageboxMessage = "请先添加图片后再试";
-        //         }
+        // if(ImGui::BeginMenu("编辑")){
+        //     //不能交换图片的话，这个功能就没意义了
+        //     // if(ImGui::MenuItem("重置")){
+        //     //     g_ImageOperate.reset = true;
+        //     // }
+        //     if(ImGui::MenuItem("导入")){
+        //         //导入的肯定是小图。因为要导入大图的话，应该从文件->打开那里导入
         //     }
         //     ImGui::EndMenu();
         // }
@@ -608,27 +578,18 @@ void updateImguiWidget(){
             if(ImGui::InputInt("扩大图片", &increaseRowAndColumn)){
                 //输入完后，仍然会一直执行, 直到点一下其他地方
                 if(g_SelectImage != -1){
-                    // uint32_t index = g_Split.GetIncreaseIndex();
-                    // if(index != g_SelectImage){
-                    //     increaseRowAndColumn[0] = 1;                    
-                    //     increaseRowAndColumn[1] = 1;
-                    // }
                     g_Split.IncreaseImage(g_SelectImage, increaseRowAndColumn);
-                    if(g_Split.IsLoadTexture()){
-                    // if(g_Split.IsLoadTexture() && increaseRowAndColumn[0] > 1 && increaseRowAndColumn[1] > 1){
-                        OpenImage(g_ImageName);
-                    }
+                    g_ImageOperate.update = true;
                 }
-                // else{
-                //     increaseRowAndColumn[0] = 1;                    
-                //     increaseRowAndColumn[1] = 1;
-                // }
+                else{
+                    increaseRowAndColumn = 1;
+                }
             }
             if(ImGui::InputInt2("图片行列", rowAndcolumn)){
                 if(rowAndcolumn[0] != 0 && rowAndcolumn[1] != 0){
                     g_Split.SetRow(rowAndcolumn[0]);
                     g_Split.SetColumn(rowAndcolumn[1]);
-                    if(g_Split.IsLoadTexture())OpenImage(g_ImageName);
+                    g_ImageOperate.update = true;
                 }
                 else{
                     rowAndcolumn[0] = 1;
@@ -647,11 +608,11 @@ void updateImguiWidget(){
             static float degree[] = { g_Split.GetDegree().x, g_Split.GetDegree().y, g_Split.GetDegree().z };
             if(ImGui::SliderFloat("卡通化因子", &cartoons, 0, 20)){
                 g_Split.SetCartoons(cartoons);
-                g_Split.UpdateImage(g_VulkanDevice.device);
+                g_Split.UpdateImageUniform(g_VulkanDevice.device);
             }
             if(ImGui::InputFloat3("卡通化程度", degree)){
                 g_Split.SetDegree(glm::vec3(degree[0], degree[1], degree[2]));
-                g_Split.UpdateImage(g_VulkanDevice.device);
+                g_Split.UpdateImageUniform(g_VulkanDevice.device);
             }
         }
         if(ImGui::Button("注意事项")){
@@ -1036,7 +997,21 @@ void display(GLFWwindow* window){
     //     g_Split.SetSplitType(g_VulkanDevice.device, g_ImageName, g_ImageOperate.splitType, g_WindowWidth, g_WindowHeight, g_VulkanQueue.graphics, g_VulkanPool.commandPool);
     //     g_ImageOperate.splitType = SPLIT_TYPE_UNKNOW;
     // }
-
+    if(g_ImageOperate.update){
+        g_ImageOperate.update = false;
+        DeselectedAll();
+        g_Split.UpdateImage(g_VulkanDevice.device, g_VulkanQueue.graphics, g_VulkanPool.commandPool);
+        g_Split.UpdateDescriptorSet(g_VulkanDevice.device);
+        g_Split.UpdateImageUniform(g_VulkanDevice.device);
+    }
+    // if(g_ImageOperate.reset){
+    //     g_ImageOperate.reset = false;
+    //     DeselectedAll();
+    //     g_Split.ResetImage(g_VulkanDevice.device, g_VulkanQueue.graphics, g_VulkanPool.commandPool);
+    //     g_Split.UpdateDescriptorSet(g_VulkanDevice.device);
+    //     g_Split.UpdateBackground(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
+    //     g_Split.UpdateImage(g_VulkanDevice.device);
+    // }
     if(g_ImageOperate.change){
         g_ImageOperate.change = false;
         if(g_SelectImage != -1)DeselectedImage(g_SelectImage);
@@ -1044,7 +1019,7 @@ void display(GLFWwindow* window){
 
         g_Split.UpdateDescriptorSet(g_VulkanDevice.device);
         g_Split.UpdateBackground(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
-        g_Split.UpdateImage(g_VulkanDevice.device);
+        g_Split.UpdateImageUniform(g_VulkanDevice.device);
         g_SelectImage = -1;
         // g_Split.IncreaseImage(0, 1, 1);
     }

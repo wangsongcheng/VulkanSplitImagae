@@ -9,7 +9,7 @@
 //如果val比alignment小，则返回alignment，否则如果val大于alignment但小于alignment*2则返回alignment*2以此类推
 #define ALIGN(val, alignment)((val + alignment - 1) & ~(alignment - 1))
 #define ROW_COLUMN_INDEX(ROW_INDEX, COLUMN_INDEX, COLUMN)((ROW_INDEX) * (COLUMN) + (COLUMN_INDEX))
-#define OFFSCREEN_DEBUG
+// #define OFFSCREEN_DEBUG
 struct BaseGraphic{
     VulkanBuffer index;
     VulkanBuffer vertex;
