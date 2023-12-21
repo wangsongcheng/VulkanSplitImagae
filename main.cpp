@@ -1001,6 +1001,8 @@ void display(GLFWwindow* window){
         g_ImageOperate.update = false;
         DeselectedAll();
         g_Split.UpdateImage(g_VulkanDevice.device, g_VulkanQueue.graphics, g_VulkanPool.commandPool);
+        g_Split.InitBackgroundPos(g_WindowWidth, g_WindowHeight);
+        g_Split.InitGridImageInfo();
         g_Split.UpdateBackground(g_VulkanDevice.device, g_WindowWidth, g_WindowHeight);
         g_Split.UpdateDescriptorSet(g_VulkanDevice.device);
         g_Split.UpdateImageUniform(g_VulkanDevice.device);

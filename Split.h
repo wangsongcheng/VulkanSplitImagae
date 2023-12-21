@@ -51,8 +51,6 @@ class SplitImage:public VulkanSplit{
     glm::vec2 mIncreaseGridPos, mOffscreenIncreaseGridPos;
     VkExtent2D mGrid, mIncreaseGrid, mOffscreenGrid, mOffscreenIncreaseGrid;
     // SPLIT_TYPE mSplitType = SPLIT_TYPE_JIU_GONG_GE;
-    void InitGridImageInfo();
-    void InitBackgroundPos(uint32_t windowWidth, uint32_t windowHeight);
     uint32_t ResetImage(VkDevice device, const void *data, uint32_t width, uint32_t height, bool increase);
     //重置图片, 调用前请先读出图片数据
     // void InitJigsawPos(const glm::vec3&backgroundPos, const VkExtent2D&backgroundSize);
@@ -146,7 +144,9 @@ public:
     // }
     void Cleanup(VkDevice device);
 
+    void InitGridImageInfo();
     void UpdateImageUniform(VkDevice device);
+    void InitBackgroundPos(uint32_t windowWidth, uint32_t windowHeight);
     void UpdateImage(VkDevice device, VkQueue graphics, VkCommandPool pool);
     
     void WriteImageToFolder(const std::string&file);
