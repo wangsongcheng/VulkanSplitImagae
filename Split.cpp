@@ -140,7 +140,7 @@ void SplitImage::WriteImageToFolder(const std::string&file){
         else if(images.type == "jpg")stbi_write_jpg(fileName, imageSize.width, imageSize.height, 4, images.datas[i], 0);
         else if(images.type == "bmp")stbi_write_bmp(fileName, imageSize.width, imageSize.height, 4, images.datas[i]);
     }
-    imageSize.width *= effects.increase.rowAndcolumn;//mIncreaseGrid图片还带了偏移
+    imageSize.width *= effects.increase.rowAndcolumn;//这时的mIncreaseGrid在InitGridImageInfo函数中被修改成带偏移的了
     imageSize.height *= effects.increase.rowAndcolumn;
     if(effects.increase.increase){
         sprintf(fileName, "%s/picture%d.%s", file.c_str(), images.datas.size(), images.type.c_str());
