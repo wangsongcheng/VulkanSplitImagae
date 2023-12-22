@@ -130,7 +130,7 @@ void SplitImage::Cleanup(VkDevice device){
 
 void SplitImage::WriteImageToFolder(const std::string&file){
     VkExtent2D imageSize;
-    char fileName[500] = {};
+    char fileName[MAX_BYTE] = {};
     // const uint32_t imageCount = mRow * mColumn;
     imageSize.height = images.size.height / mRow;
     imageSize.width = images.size.width / mColumn;
@@ -140,11 +140,13 @@ void SplitImage::WriteImageToFolder(const std::string&file){
         else if(images.type == "jpg")stbi_write_jpg(fileName, imageSize.width, imageSize.height, 4, images.datas[i], 0);
         else if(images.type == "bmp")stbi_write_bmp(fileName, imageSize.width, imageSize.height, 4, images.datas[i]);
     }
+    imageSize.width *= effects.increase.rowAndcolumn;//mIncreaseGrid图片还带了偏移
+    imageSize.height *= effects.increase.rowAndcolumn;
     if(effects.increase.increase){
         sprintf(fileName, "%s/picture%d.%s", file.c_str(), images.datas.size(), images.type.c_str());
-        if(images.type == "png")stbi_write_png(fileName, mIncreaseGrid.width, mIncreaseGrid.height, 4, mIncreaseImageDatas, 0);
-        else if(images.type == "jpg")stbi_write_jpg(fileName, mIncreaseGrid.width, mIncreaseGrid.height, 4, mIncreaseImageDatas, 0);
-        else if(images.type == "bmp")stbi_write_bmp(fileName, mIncreaseGrid.width, mIncreaseGrid.height, 4, mIncreaseImageDatas);
+        if(images.type == "png")stbi_write_png(fileName, imageSize.width, imageSize.height, 4, mIncreaseImageDatas, 0);
+        else if(images.type == "jpg")stbi_write_jpg(fileName, imageSize.width, imageSize.height, 4, mIncreaseImageDatas, 0);
+        else if(images.type == "bmp")stbi_write_bmp(fileName, imageSize.width, imageSize.height, 4, mIncreaseImageDatas);
     }
 }
 void SplitImage::WriteImageToFile(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphics, VkCommandPool pool, const std::string&file){
