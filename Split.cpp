@@ -131,14 +131,20 @@ void SplitImage::Cleanup(VkDevice device){
 void SplitImage::WriteImageToFolder(const std::string&file){
     VkExtent2D imageSize;
     char fileName[500] = {};
-    const uint32_t imageCount = mRow * mColumn;
+    // const uint32_t imageCount = mRow * mColumn;
     imageSize.height = images.size.height / mRow;
     imageSize.width = images.size.width / mColumn;
-    for (size_t i = 0; i < imageCount; ++i){
+    for (size_t i = 0; i < images.datas.size(); ++i){
         sprintf(fileName, "%s/picture%d.%s", file.c_str(), i, images.type.c_str());
         if(images.type == "png")stbi_write_png(fileName, imageSize.width, imageSize.height, 4, images.datas[i], 0);
         else if(images.type == "jpg")stbi_write_jpg(fileName, imageSize.width, imageSize.height, 4, images.datas[i], 0);
         else if(images.type == "bmp")stbi_write_bmp(fileName, imageSize.width, imageSize.height, 4, images.datas[i]);
+    }
+    if(effects.increase.increase){
+        sprintf(fileName, "%s/picture%d.%s", file.c_str(), images.datas.size(), images.type.c_str());
+        if(images.type == "png")stbi_write_png(fileName, mIncreaseGrid.width, mIncreaseGrid.height, 4, mIncreaseImageDatas, 0);
+        else if(images.type == "jpg")stbi_write_jpg(fileName, mIncreaseGrid.width, mIncreaseGrid.height, 4, mIncreaseImageDatas, 0);
+        else if(images.type == "bmp")stbi_write_bmp(fileName, mIncreaseGrid.width, mIncreaseGrid.height, 4, mIncreaseImageDatas);
     }
 }
 void SplitImage::WriteImageToFile(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphics, VkCommandPool pool, const std::string&file){

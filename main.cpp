@@ -3,7 +3,6 @@
 #ifdef __linux
 #include <unistd.h>
 #include <dirent.h>
-#define MAX_BYTE 0xff
 #endif
 #ifdef WIN32
 #include <Windows.h>
