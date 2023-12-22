@@ -1,5 +1,8 @@
 #ifndef SPLIT_INCLUDE_H
 #define SPLIT_INCLUDE_H
+#ifdef __linux
+#define MAX_BYTE 0xff
+#endif
 #include "VulkanSplit.h"
 // enum SPLIT_TYPE{
 //     SPLIT_TYPE_JIGSAW = 0,
