@@ -82,6 +82,15 @@ VkResult VulkanBuffer::CreateBuffer(VkDevice device, VkDeviceSize size, VkBuffer
     info.size = size;
     info.usage = usage;
     info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    // VkResult result = vkCreateBuffer(device, &info, nullptr, &buffer);
+    // printf("in function %s: size is %u, buffer address is %p\n", __FUNCTION__, size, buffer);
+    // if((unsigned long)buffer == 0xb097c90000000027){
+    //     printf("is the buffer\n");
+    // }
+    // if((unsigned long)buffer == 0x4b7df1000000002f){
+    //     printf("is the buffer\n");
+    // }
+    // return result;
     return vkCreateBuffer(device, &info, nullptr, &buffer);
 }
 void VulkanBuffer::AllocateAndBindMemory(VkDevice device, VkMemoryPropertyFlags properties){
@@ -91,6 +100,7 @@ void VulkanBuffer::AllocateAndBindMemory(VkDevice device, VkMemoryPropertyFlags 
 	vkGetBufferMemoryRequirements(device, buffer, &memoryRequirements);
     vkf::tool::AllocateMemory(device, memoryRequirements.size, memoryRequirements.memoryTypeBits, properties, memory);
 	vkBindBufferMemory(device, buffer, memory, 0);
+    // printf("in function %s: buffer memeory address is %p\n", __FUNCTION__, memory);
 }
 void VulkanBuffer::UpdateData(VkDevice device, const void * pData, VkDeviceSize offset){
     UpdateData(device, size, pData, offset);

@@ -151,6 +151,7 @@ VulkanSplit::~VulkanSplit(){
 }
 
 void VulkanSplit::Cleanup(VkDevice device){
+    offscreenPass.color.Destroy(device);
     vkDestroySampler(device, mTextureSampler, nullptr);
     vkDestroyDescriptorSetLayout(device, mSetLayout, nullptr);
     vkDestroySemaphore(device, offscreenPass.semaphore, nullptr);
@@ -158,20 +159,27 @@ void VulkanSplit::Cleanup(VkDevice device){
     vkDestroyFramebuffer(device, offscreenPass.frameBuffer, nullptr);
 
     mTexture.Destroy(device);
+    mIncrease.Destroy(device);
 
     mRect.index.Destroy(device);
     mRect.vertex.Destroy(device);
 
     uniform.position.Destroy(device);
     uniform.background.Destroy(device);
+    uniform.offscreenPosition.Destroy(device);
+    uniform.offscreenBackground.Destroy(device);
 
     DestroyGraphicsPipeline(device);
+#ifdef OFFSCREEN_DEBUG
+    uniform.debug.Destroy(device);
+#endif
 }
 
 void VulkanSplit::RecreateImageUniform(VkDevice device, uint32_t imageCount){
     if(uniform.position.buffer != VK_NULL_HANDLE){
         uniform.position.Destroy(device);
     }
+    //该变量在其他地方，没销毁即可被创建一次
     if(uniform.offscreenPosition.buffer != VK_NULL_HANDLE){
         uniform.offscreenPosition.Destroy(device);
     }
@@ -232,10 +240,6 @@ void VulkanSplit::Setup(VkPhysicalDevice physicalDevice, VkDevice device, VkQueu
 
     uniform.offscreenBackground.CreateBuffer(device, sizeof(glm::mat4), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     uniform.offscreenBackground.AllocateAndBindMemory(device, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-    uniform.offscreenPosition.CreateBuffer(device, mMinUniformBufferOffset * imageCount, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-    uniform.offscreenPosition.AllocateAndBindMemory(device, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    uniform.offscreenPosition.size = mMinUniformBufferOffset;
 
     vkf::tool::AllocateDescriptorSets(device, pool.descriptorPool, &mSetLayout, 1, &descriptorset.set);
     vkf::tool::AllocateDescriptorSets(device, pool.descriptorPool, &mSetLayout, 1, &descriptorset.background);
@@ -308,6 +312,10 @@ void VulkanSplit::DestroyGraphicsPipeline(VkDevice device){
 
     pipelines.offscreenBackground.DestroyLayout(device);
     pipelines.offscreenBackground.DestroyPipeline(device);
+#ifdef OFFSCREEN_DEBUG
+    pipelines.debug.DestroyLayout(device);
+    pipelines.debug.DestroyPipeline(device);
+#endif
 }
 
 void VulkanSplit::CreateGraphicsPipeline(VkDevice device, VkRenderPass renderpass, uint32_t scissorWidth, uint32_t scissorHeight){

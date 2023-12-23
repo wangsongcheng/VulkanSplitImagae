@@ -975,8 +975,10 @@ void setup(GLFWwindow *windows){
 void cleanup(){
     vkDeviceWaitIdle(g_VulkanDevice.device);
 
-    g_Split.DestroyGraphicsPipeline(g_VulkanDevice.device);
     g_Split.Cleanup(g_VulkanDevice.device);
+
+    ImGui_ImplGlfw_Shutdown();
+    ImGui_ImplVulkan_Shutdown();
 
     // vkDestroyDescriptorSetLayout(g_VulkanDevice.device, g_SetLayout, nullptr);
     // DestroyGraphicsPipeline(g_GraphicsPipeline);
