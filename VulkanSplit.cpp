@@ -115,7 +115,7 @@ void VulkanSplit::CreateRectResource(VkDevice device, VkQueue graphics, VkComman
 void VulkanSplit::DrawImage(VkCommandBuffer command, const glm::mat4&projection, VkDescriptorSet set, const GraphicsPipeline &texture){
     uint32_t dynamicOffset;
     texture.BindPipeline(command);
-    texture.PushPushConstant(command, VK_SHADER_STAGE_VERTEX_BIT, sizeof(glm::mat4), &projection);
+    texture.PushConstant(command, VK_SHADER_STAGE_VERTEX_BIT, sizeof(glm::mat4), &projection);
     for (uint32_t i = 0; i < mImageCount; ++i){
         dynamicOffset = i * mMinUniformBufferOffset;
         texture.BindDescriptorSet(command, set, 1, &dynamicOffset);
@@ -129,7 +129,7 @@ void VulkanSplit::DrawBackground(VkCommandBuffer command, const glm::mat4&projec
     pc.projection = projection;
     background.BindPipeline(command);
     background.BindDescriptorSet(command, set, 1, &dynamicOffset);
-    background.PushPushConstant(command, VK_SHADER_STAGE_VERTEX_BIT, sizeof(PushConstant), &pc);
+    background.PushConstant(command, VK_SHADER_STAGE_VERTEX_BIT, sizeof(PushConstant), &pc);
     //绘制背景
     DrawGraphics(command, &mRect);
 }
@@ -139,7 +139,7 @@ void VulkanSplit::DrawDebug(VkCommandBuffer command, uint32_t windowWidth, uint3
     const glm::mat4 projection = glm::ortho(0.0f, (float)windowWidth * .25f, 0.0f, (float)windowHeight * .25f, -1.0f, 1.0f);
     pipelines.debug.BindPipeline(command);
     pipelines.debug.BindDescriptorSet(command, descriptorset.debug, 1, &dynamicOffset);
-    pipelines.debug.PushPushConstant(command, VK_SHADER_STAGE_VERTEX_BIT, sizeof(glm::mat4), &projection);
+    pipelines.debug.PushConstant(command, VK_SHADER_STAGE_VERTEX_BIT, sizeof(glm::mat4), &projection);
     DrawGraphics(command, &mRect);
 }
 #endif

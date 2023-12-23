@@ -113,19 +113,20 @@ public:
     //std::vector<Shader>::iterator GetShaders(VkShaderStageFlags stage);
     //VkShaderStageFlags GetShaderStageFlags(const spv::ExecutionModel&executionModel);
     //std::string GetShaderStageName(VkShaderStageFlags stage);
-    virtual void PushPushConstant(const VkPushConstantRange& pc);
+    // virtual void PushPushConstant(const VkPushConstantRange& pc);
     virtual void PushPushConstant(uint32_t size, VkShaderStageFlags stage, uint32_t offset = 0);
-    virtual void PushPushConstant(VkCommandBuffer cmd, VkShaderStageFlags stage, uint32_t size, const void *pData, uint32_t offset = 0)const;
+    virtual void PushConstant(VkCommandBuffer cmd, VkShaderStageFlags stage, uint32_t size, const void *pData, uint32_t offset = 0)const;
 
     // virtual void PushDescriptorSetLayoutBinding(uint32_t binding, VkShaderStageFlags stage, VkDescriptorType descriptorType, uint32_t uiSetIndex = 0);
     //分离原因:不同管线，但相同描述符布局，可以共同更新
     // virtual VkResult AllocateDescriptorSets(VkDevice device, VkDescriptorPool pool, uint32_t setCount, VkDescriptorSet *pDescriptorSet, uint32_t uiSetIndex = 0);
     // virtual void UpdateDescriptorSets(VkDevice device, const std::vector<VulkanBuffer>&descriptorBuffer, const std::vector<VulkanImage>&descriptorImage, VkDescriptorSet&destSet, const VkSampler&textureSampler = VK_NULL_HANDLE);
 
-    virtual void PushShader(const Shader&shader);
-    virtual void PushShader(VkShaderStageFlags stage, const VkShaderModule& Module);
+    // virtual void PushShader(const Shader&shader);
+    // virtual void PushShader(VkShaderStageFlags stage, const VkShaderModule& Module);
     virtual void PushShader(VkDevice device, VkShaderStageFlags stage, const std::string&file);
     virtual void PushShader(VkDevice device, VkShaderStageFlags stage, const std::vector<uint32_t>& code);
+    virtual void PushShader(VkDevice device, VkShaderStageFlags stage, uint32_t size, const uint32_t *code);
 
     virtual VkResult CreatePipeline(VkDevice device, VkRenderPass renderPass, VkPipelineCache cache) = 0;
 

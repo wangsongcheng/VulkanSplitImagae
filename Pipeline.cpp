@@ -228,17 +228,16 @@ void Pipeline::DestroyPipeline(VkDevice device){
 //     cacheData.resize(cacheDataSize / sizeof(char));
 //     vkGetPipelineCacheData(device, mCache, &cacheDataSize, cacheData.data());
 // }
-void Pipeline::PushPushConstant(const VkPushConstantRange&pc) {
-    mPushConstants.push_back(pc);
-}
+// void Pipeline::PushPushConstant(const VkPushConstantRange&pc) {
+// }
 void Pipeline::PushPushConstant(uint32_t size, VkShaderStageFlags stage, uint32_t offset){
     VkPushConstantRange pc{};
     pc.size = size;
     pc.offset = offset;
     pc.stageFlags = stage;
-    PushPushConstant(pc);
+    mPushConstants.push_back(pc);
 }
-void Pipeline::PushPushConstant(VkCommandBuffer cmd, VkShaderStageFlags stage, uint32_t size, const void *pData, uint32_t offset)const{
+void Pipeline::PushConstant(VkCommandBuffer cmd, VkShaderStageFlags stage, uint32_t size, const void *pData, uint32_t offset)const{
     vkCmdPushConstants(cmd, mLayout, stage, offset, size, pData);
 }
 // void Pipeline::PushDescriptorSetLayoutBinding(uint32_t binding, VkShaderStageFlags stage, VkDescriptorType descriptorType, uint32_t uiSetIndex){
@@ -293,16 +292,16 @@ void Pipeline::PushPushConstant(VkCommandBuffer cmd, VkShaderStageFlags stage, u
 //     }
 //     vkUpdateDescriptorSets(device, writeDescriptorSet.size(), writeDescriptorSet.data(), 0, nullptr);
 // }
-void Pipeline::PushShader(const Shader&shader){
-    mShaders.push_back(shader);
-}
-void Pipeline::PushShader(VkShaderStageFlags stage, const VkShaderModule& Module) {
-    Shader shader{};
-    shader.mStage = stage;
-    shader.mModule = Module;
-    shader.mEntryName = "main";
-    PushShader(shader);
-}
+// void Pipeline::PushShader(const Shader&shader){
+//     mShaders.push_back(shader);
+// }
+// void Pipeline::PushShader(VkShaderStageFlags stage, const VkShaderModule& Module) {
+//     Shader shader{};
+//     shader.mStage = stage;
+//     shader.mModule = Module;
+//     shader.mEntryName = "main";
+//     mShaders.push_back(shader);
+// }
 void Pipeline::PushShader(VkDevice device, VkShaderStageFlags stage, const std::string&file){
     std::vector<uint32_t>data;
     vkf::tool::GetFileContent(file, data);
@@ -310,13 +309,21 @@ void Pipeline::PushShader(VkDevice device, VkShaderStageFlags stage, const std::
 }
 
 void Pipeline::PushShader(VkDevice device, VkShaderStageFlags stage, const std::vector<uint32_t>&code) {
+    PushShader(device, stage, code.size() * sizeof(uint32_t), code.data());
+}
+
+void Pipeline::PushShader(VkDevice device, VkShaderStageFlags stage, uint32_t size, const uint32_t *code){
     VkShaderModule sModule;
     VkShaderModuleCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    info.pCode = code.data();
-    info.codeSize = code.size() * sizeof(uint32_t);
-    vkCreateShaderModule(device, &info, nullptr, &sModule);
-    PushShader(stage, sModule);
+    info.pCode = code;
+    info.codeSize = size;
+    VK_CHECK(vkCreateShaderModule(device, &info, nullptr, &sModule));
+    Shader shader{};
+    shader.mStage = stage;
+    shader.mModule = sModule;
+    shader.mEntryName = "main";
+    mShaders.push_back(shader);
 }
 
 GraphicsPipeline::GraphicsPipeline(){

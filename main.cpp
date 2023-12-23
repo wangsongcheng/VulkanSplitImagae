@@ -962,11 +962,7 @@ void setup(GLFWwindow *windows){
 
     io.Fonts->AddFontFromFileTTF("fonts/SourceHanSerifCN-Bold.otf", 20, NULL, io.Fonts->GetGlyphRangesChineseFull());
 
-    VkCommandBuffer cmd;
-    vkf::tool::BeginSingleTimeCommands(g_VulkanDevice.device, g_VulkanPool.commandPool, cmd);
-    ImGui_ImplVulkan_CreateFontsTexture(cmd);
-    vkf::tool::EndSingleTimeCommands(g_VulkanDevice.device, g_VulkanPool.commandPool, g_VulkanQueue.graphics, cmd);
-    ImGui_ImplVulkan_DestroyFontUploadObjects();
+    ImGui_ImplVulkan_CreateFontsTexture(g_VulkanPool.commandPool, g_VulkanQueue.graphics);
 
     vkf::tool::AllocateCommandBuffers(g_VulkanDevice.device, g_VulkanPool.commandPool, 1, &g_CommandBuffer);
 
@@ -979,15 +975,6 @@ void cleanup(){
 
     ImGui_ImplGlfw_Shutdown();
     ImGui_ImplVulkan_Shutdown();
-
-    // vkDestroyDescriptorSetLayout(g_VulkanDevice.device, g_SetLayout, nullptr);
-    // DestroyGraphicsPipeline(g_GraphicsPipeline);
-
-    // g_Texture.Destroy(g_VulkanDevice.device);
-
-    // g_Index.Destroy(g_VulkanDevice.device);
-    // g_Vertex.Destroy(g_VulkanDevice.device);
-    // g_Position.Destroy(g_VulkanDevice.device);
 }
 void display(GLFWwindow* window){
     static size_t currentFrame;
