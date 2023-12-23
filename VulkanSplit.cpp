@@ -169,7 +169,7 @@ void VulkanSplit::Cleanup(VkDevice device){
     uniform.offscreenPosition.Destroy(device);
     uniform.offscreenBackground.Destroy(device);
 
-    DestroyGraphicsPipeline(device);
+    // DestroyGraphicsPipeline(device);
 #ifdef OFFSCREEN_DEBUG
     uniform.debug.Destroy(device);
 #endif
